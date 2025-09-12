@@ -1,8 +1,7 @@
-use crate::cli::Cli;
 use crate::context::{Approval, Sandbox};
 use crate::llm::{plan_with_llm, ToolPlan};
 use crate::tools::{registry::ToolRegistry, ToolInvocation, ToolOutcome};
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use serde_json::json;
 use std::io::{self, Write};
 use std::path::PathBuf;
