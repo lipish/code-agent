@@ -1,0 +1,14 @@
+# OS/editor
+.DS_Store
+.idea/
+.vscode/
+
+# Rust build artifacts
+**/target/
+
+# Node/JS artifacts if any
+node_modules/
+
+# Ignore the cloned Roo-Code analysis directory unless explicitly needed
+Roo-Code/
+
