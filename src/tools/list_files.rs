@@ -26,7 +26,7 @@ impl Tool for ListFiles {
 
         let mut hits = vec![];
         let mut builder = sandbox.build_walker();
-        if let Some(pat) = glob { builder.add_custom_ignore_filename(""); /* no-op: ignore can't filter by glob here */ }
+        if let Some(_pat) = glob { builder.add_custom_ignore_filename(""); /* no-op */ }
         let root = sandbox.root().to_path_buf();
         for dent in builder.build().flatten() {
             let p = dent.path();
