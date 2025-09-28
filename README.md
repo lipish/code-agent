@@ -34,7 +34,7 @@ Note: LLM planning is currently stubbed, so the agent will ask for a manual JSON
 
 ## CLI flags
 - --model <MODEL>
-  - OpenAI‑compatible model name (planning is stubbed now)
+  - LLM model name (planning is stubbed now)
 - -y, --yes
   - Auto‑approve write/command actions
 - --working-dir <PATH>
@@ -85,7 +85,7 @@ Note: LLM planning is currently stubbed, so the agent will ask for a manual JSON
 - write_file and run_command require explicit approval unless `--yes` is set
 
 ## Roadmap (short‑term)
-- LLM planning: OpenAI‑compatible chat call returning strict JSON tool plans
+- LLM planning: chat call returning strict JSON tool plans
 - Apply diff/patch tool and batch file ops
 - Repetition detection/backoff and basic heuristics against loops
 - Richer search: ripgrep integration and tree‑sitter symbols for smarter context

@@ -2,9 +2,13 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Debug, Parser, Clone)]
-#[command(name = "agent-terminal", version, about = "A Rust code agent terminal (Roo-Code inspired)")]
+#[command(
+    name = "agent-terminal",
+    version,
+    about = "A Rust code agent terminal (Roo-Code inspired)"
+)]
 pub struct Cli {
-    /// OpenAI-compatible model name (e.g. gpt-4o-mini). If unset, runs in manual mode.
+    /// LLM model name (e.g. gpt-4o-mini, glm-4.5). If unset, runs in manual mode.
     #[arg(long)]
     pub model: Option<String>,
 
@@ -29,4 +33,3 @@ pub enum Commands {
     /// Ask the agent to propose a plan (prints the tool call it would do)
     Plan { prompt: String },
 }
-

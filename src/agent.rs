@@ -1,7 +1,7 @@
 use crate::context::{Approval, Sandbox};
-use crate::llm::{plan_with_llm, ToolPlan};
+use crate::llm::plan_with_llm;
 use crate::tools::{registry::ToolRegistry, ToolInvocation, ToolOutcome};
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use serde_json::json;
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -23,9 +23,16 @@ pub struct Agent {
 impl Agent {
     pub fn new(config: Config) -> Result<Self> {
         let sandbox = Sandbox::new(config.working_dir.clone());
-        let approval = Approval { auto_yes: config.yes };
+        let approval = Approval {
+            auto_yes: config.yes,
+        };
         let registry = ToolRegistry::default();
-        Ok(Self { config, sandbox, approval, registry })
+        Ok(Self {
+            config,
+            sandbox,
+            approval,
+            registry,
+        })
     }
 
     fn tool_schema(&self) -> String {
@@ -41,28 +48,24 @@ impl Agent {
                     "args": {"type": "object"}
                 }
             }
-        })).unwrap()
+        }))
+        .unwrap()
     }
-
     pub async fn plan(&mut self, prompt: &str) -> Result<ToolInvocation> {
-        if let Some(model) = &self.config.model {
-            match plan_with_llm(model, prompt, &self.tool_schema()).await {
-                Ok(plan) => Ok(ToolInvocation { tool: plan.tool, args: plan.args }),
-                Err(e) => {
-                    eprintln!("LLM planning failed: {e}. Falling back to manual JSON plan input.");
-                    Self::read_manual_plan()
-                }
-            }
-        } else {
-            // No model: ask user for a JSON tool invocation
-            println!("No model configured. Enter a JSON plan like {{\"tool\":\"list_files\",\"args\":{{}}}}:");
-            Self::read_manual_plan()
-        }
+        let model = self.config.model.as_ref().ok_or_else(|| anyhow!("No model configured. Please specify a model using --model or by setting the LLM_MODEL environment variable."))?;
+        let plan = plan_with_llm(model, prompt, &self.tool_schema()).await?;
+        Ok(ToolInvocation {
+            tool: plan.tool,
+            args: plan.args,
+        })
     }
 
     pub async fn exec(&mut self, prompt: &str) -> Result<()> {
         let invocation = self.plan(prompt).await?;
-        let outcome = self.registry.run(&self.sandbox, &self.approval, &invocation).await?;
+        let outcome = self
+            .registry
+            .run(&self.sandbox, &self.approval, &invocation)
+            .await?;
         Self::print_outcome(&outcome);
         Ok(())
     }
@@ -70,16 +73,26 @@ impl Agent {
     pub async fn repl(&mut self) -> Result<()> {
         println!("Agent REPL. Type a goal, or /quit to exit.");
         loop {
-            print!("goal> "); io::stdout().flush().ok();
+            print!("goal> ");
+            io::stdout().flush().ok();
             let mut goal = String::new();
-            if io::stdin().read_line(&mut goal)? == 0 { break; }
+            if io::stdin().read_line(&mut goal)? == 0 {
+                break;
+            }
             let goal = goal.trim();
-            if goal.is_empty() { continue; }
-            if goal == "/quit" { break; }
+            if goal.is_empty() {
+                continue;
+            }
+            if goal == "/quit" {
+                break;
+            }
 
             match self.plan(goal).await {
                 Ok(invocation) => {
-                    let outcome = self.registry.run(&self.sandbox, &self.approval, &invocation).await;
+                    let outcome = self
+                        .registry
+                        .run(&self.sandbox, &self.approval, &invocation)
+                        .await;
                     match outcome {
                         Ok(out) => Self::print_outcome(&out),
                         Err(e) => eprintln!("error: {e}"),
@@ -94,16 +107,9 @@ impl Agent {
     fn print_outcome(outcome: &ToolOutcome) {
         match outcome {
             ToolOutcome::Text(s) => println!("{}", s),
-            ToolOutcome::Json(v) => println!("{}", serde_json::to_string_pretty(v).unwrap_or_default()),
+            ToolOutcome::Json(v) => {
+                println!("{}", serde_json::to_string_pretty(v).unwrap_or_default())
+            }
         }
     }
-
-    fn read_manual_plan() -> Result<ToolInvocation> {
-        print!("> "); io::stdout().flush().ok();
-        let mut line = String::new();
-        io::stdin().read_line(&mut line)?;
-        let plan: ToolPlan = serde_json::from_str(line.trim())?;
-        Ok(ToolInvocation { tool: plan.tool, args: plan.args })
-    }
 }
-
