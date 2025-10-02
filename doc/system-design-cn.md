@@ -23,7 +23,7 @@
 
 ### 4. 开放架构
 - 不依赖 agents.md 等约定性文件
-- 不遵循 Codex 或 Roo 的特定规范
+- 不遵循特定的外部规范
 - 支持自定义工具和扩展
 
 ## 系统架构
@@ -31,32 +31,332 @@
 ### 整体架构图
 
 ```
-┌─────────────────┐
-│   用户输入      │
-└─────────┬───────┘
-          │
-┌─────────▼───────┐
-│  AI 理解引擎     │
-│  - 任务理解      │
-│  - 目标分析      │
-│  - 策略制定      │
-└─────────┬───────┘
-          │
-┌─────────▼───────┐
-│  AI 执行引擎     │
-│  - 工具选择      │
-│  - 步骤执行      │
-│  - 动态调整      │
-└─────────┬───────┘
-          │
-┌─────────▼───────┐
-│  结果输出       │
-└─────────────────┘
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   CLI 客户端    │    │  Rust 客户端   │    │  HTTP 客户端    │
+└─────────┬───────┘    └─────────┬───────┘    └─────────┬───────┘
+          │                      │                      │
+          └──────────────────────┼──────────────────────┘
+                                 │
+                    ┌─────────────┴─────────────┐
+                    │    AI Agent 服务        │
+                    │   (核心业务逻辑)          │
+                    └─────────────┬─────────────┘
+                                 │
+          ┌──────────────────────┼──────────────────────┘
+          │                      │                      │
+    ┌─────┴─────┐        ┌──────┴───────┐        ┌──────┴─────┐
+    │   模型     │        │    工具       │        │   指标      │
+    │ (Zhipu,   │        │ (文件操作,    │        │ (Prometheus │
+    │ OpenAI,   │        │ 命令执行,    │        │  导出)      │
+    │ 等)       │        │ 等)          │        │            │
+    └───────────┘        └─────────────┘        └────────────┘
+```
+
+### 服务架构
+
+AI-Native 代码助手已转换为独立服务，支持多种接口：
+
+#### 1. 服务层架构
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    AI Agent 服务                           │
+├─────────────────────────────────────────────────────────────┤
+│  服务 API 层                                                │
+│  ├─ Rust API (AiAgentApi trait)                           │
+│  ├─ HTTP REST API (Axum 服务器)                           │
+│  └─ WebSocket API (实时更新)                              │
+├─────────────────────────────────────────────────────────────┤
+│  核心业务逻辑                                               │
+│  ├─ 任务理解与规划                                         │
+│  ├─ 执行引擎                                               │
+│  ├─ 工具管理                                               │
+│  └─ 并发任务处理                                           │
+├─────────────────────────────────────────────────────────────┤
+│  基础设施层                                                 │
+│  ├─ 指标收集                                               │
+│  ├─ 错误处理                                               │
+│  ├─ 配置管理                                               │
+│  └─ 健康监控                                               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### 2. 双接口设计
+
+**Rust API 接口：**
+- 直接进程内使用
+- 零开销通信
+- 类型安全接口
+- 适用于 Rust 应用程序
+
+**HTTP REST API 接口：**
+- 语言无关访问
+- 标准 RESTful 端点
+- JSON 请求/响应格式
+- 易于与任何应用程序集成
+
+#### 3. 任务处理流程
+
+```
+用户请求 → API 层 → 服务核心 → AI 理解 → 执行规划 → 工具执行 → 结果 → API 响应
 ```
 
 ### 核心组件
 
-#### 1. AI 理解引擎 (UnderstandingEngine)
+#### 1. AI Agent 服务 (AiAgentService)
+
+协调所有操作并提供 Rust API 和 HTTP 接口的中央服务组件。
+
+**文件位置：** `src/service/core.rs`
+
+```rust
+pub struct AiAgentService {
+    config: ServiceConfig,
+    metrics: Arc<MetricsCollector>,
+    agent: Arc<RwLock<CodeAgent>>,
+    active_tasks: Arc<RwLock<HashMap<String, Arc<RwLock<TaskContext>>>>,
+    task_semaphore: Arc<Semaphore>,
+    available_tools: Vec<String>,
+}
+
+impl AiAgentService {
+    pub async fn new(
+        service_config: ServiceConfig,
+        agent_config: AgentConfig
+    ) -> Result<Self, ServiceError> {
+        // 使用配置初始化服务
+    }
+
+    pub async fn execute_task(&self, request: TaskRequest) -> Result<TaskResponse, ServiceError> {
+        // 带资源管理的并发任务执行
+        let _permit = self.task_semaphore.acquire().await?;
+
+        let task_id = request.task_id.clone()
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+
+        // 通过 AI 代理执行任务
+        let result = self.agent.read().await
+            .process_task(&request.task).await?;
+
+        // 收集指标并返回响应
+        self.metrics.record_task_completion(
+            execution_time,
+            result.is_success()
+        ).await;
+
+        Ok(TaskResponse {
+            task_id,
+            status: TaskStatus::Completed,
+            result: Some(result),
+            metrics: self.metrics.get_metrics_snapshot().await,
+            ..
+        })
+    }
+
+    pub async fn execute_batch(&self, request: BatchTaskRequest) -> Result<BatchTaskResponse, ServiceError> {
+        // 处理并发批量任务执行
+        match request.mode {
+            BatchExecutionMode::Parallel => {
+                // 使用受控并行度并发执行任务
+                let tasks = request.tasks.into_iter()
+                    .map(|task| self.execute_task(task))
+                    .collect::<Vec<_>>();
+
+                let results = futures::future::join_all(tasks).await;
+                // 处理结果并编译批量响应
+            }
+            BatchExecutionMode::Sequential => {
+                // 逐个执行任务
+            }
+        }
+    }
+}
+```
+
+#### 2. 服务 API 层
+
+提供 Rust API trait 和 HTTP REST 端点。
+
+**文件位置：** `src/service/api.rs`
+
+```rust
+#[async_trait]
+pub trait AiAgentApi: Send + Sync {
+    async fn execute_task(&self, request: TaskRequest) -> ServiceResult<TaskResponse>;
+    async fn execute_batch(&self, request: BatchTaskRequest) -> ServiceResult<BatchTaskResponse>;
+    async fn get_task_status(&self, task_id: &str) -> ServiceResult<TaskResponse>;
+    async fn cancel_task(&self, task_id: &str) -> ServiceResult<()>;
+    async fn get_service_status(&self) -> ServiceResult<ServiceStatus>;
+    async fn get_metrics(&self) -> ServiceResult<MetricsSnapshot>;
+}
+
+// 进程内 API 实现
+pub struct InProcessApi {
+    service: Arc<AiAgentService>,
+}
+
+#[async_trait]
+impl AiAgentApi for InProcessApi {
+    async fn execute_task(&self, request: TaskRequest) -> ServiceResult<TaskResponse> {
+        self.service.execute_task(request).await
+    }
+    // ... 其他实现
+}
+
+// HTTP 客户端实现
+pub struct HttpClientApi {
+    client: reqwest::Client,
+    base_url: String,
+    api_key: Option<String>,
+}
+
+#[async_trait]
+impl AiAgentApi for HttpClientApi {
+    async fn execute_task(&self, request: TaskRequest) -> ServiceResult<TaskResponse> {
+        let response = self.client
+            .post(&format!("{}/api/v1/tasks", self.base_url))
+            .json(&request)
+            .send()
+            .await?;
+
+        response.json::<TaskResponse>().await
+            .map_err(|e| ServiceError::NetworkError(e.to_string()))
+    }
+    // ... 其他实现
+}
+```
+
+#### 3. HTTP 服务器
+
+基于 Axum 的 HTTP 服务器，提供 REST API 端点。
+
+**文件位置：** `src/server/main.rs`
+
+```rust
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = ServiceConfig::from_env()?;
+    let agent_config = AgentConfig::load_with_fallback("config.toml")?;
+
+    let service = Arc::new(AiAgentService::new(config, agent_config).await?);
+
+    let app = Router::new()
+        .route("/health", get(health_check))
+        .route("/api/v1/status", get(service_status))
+        .route("/api/v1/metrics", get(get_metrics))
+        .route("/api/v1/tools", get(list_tools))
+        .route("/api/v1/tasks", post(execute_task))
+        .route("/api/v1/tasks/batch", post(execute_batch))
+        .route("/api/v1/tasks/:id", get(get_task_status))
+        .route("/api/v1/tasks/:id", delete(cancel_task))
+        .layer(
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods([Method::GET, Method::POST, Method::DELETE])
+                .allow_headers(Any)
+        )
+        .layer(TraceLayer::new_for_http())
+        .with_state(AppState { service });
+
+    let listener = tokio::net::TcpListener::bind(&config.bind_address).await?;
+    tracing::info!("AI Agent 服务监听地址: {}", config.bind_address);
+
+    axum::serve(listener, app).await?;
+    Ok(())
+}
+
+// API 端点处理器
+async fn execute_task(
+    State(state): State<AppState>,
+    Json(request): Json<TaskRequest>,
+) -> Result<Json<TaskResponse>, ServiceError> {
+    let response = state.service.execute_task(request).await?;
+    Ok(Json(response))
+}
+
+async fn execute_batch(
+    State(state): State<AppState>,
+    Json(request): Json<BatchTaskRequest>,
+) -> Result<Json<BatchTaskResponse>, ServiceError> {
+    let response = state.service.execute_batch(request).await?;
+    Ok(Json(response))
+}
+```
+
+#### 4. 指标和监控
+
+全面的指标收集和监控系统。
+
+**文件位置：** `src/service/metrics_simple.rs`
+
+```rust
+pub struct MetricsCollector {
+    start_time: Instant,
+    metrics: Arc<RwLock<ServiceMetrics>>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ServiceMetrics {
+    pub total_tasks: u64,
+    pub completed_tasks: u64,
+    pub failed_tasks: u64,
+    pub active_tasks: u64,
+    pub total_execution_time: f64,
+    pub task_execution_times: Vec<f64>,
+    pub tool_usage: HashMap<String, u64>,
+    pub error_counts: HashMap<String, u64>,
+    pub system_metrics: SystemMetrics,
+}
+
+impl MetricsCollector {
+    pub async fn record_task_start(&self) {
+        let mut metrics = self.metrics.write().await;
+        metrics.total_tasks += 1;
+        metrics.active_tasks += 1;
+    }
+
+    pub async fn record_task_completion(&self, execution_time: f64, success: bool) {
+        let mut metrics = self.metrics.write().await;
+
+        if metrics.active_tasks > 0 {
+            metrics.active_tasks -= 1;
+        }
+
+        if success {
+            metrics.completed_tasks += 1;
+        } else {
+            metrics.failed_tasks += 1;
+        }
+
+        metrics.task_execution_times.push(execution_time);
+        // 仅保留最近 1000 次执行时间
+        if metrics.task_execution_times.len() > 1000 {
+            metrics.task_execution_times.remove(0);
+        }
+    }
+
+    pub async fn get_metrics_snapshot(&self) -> MetricsSnapshot {
+        let metrics = self.metrics.read().await;
+        MetricsSnapshot {
+            uptime_seconds: self.start_time.elapsed().as_secs(),
+            total_tasks: metrics.total_tasks,
+            completed_tasks: metrics.completed_tasks,
+            failed_tasks: metrics.failed_tasks,
+            active_tasks: metrics.active_tasks,
+            average_execution_time_seconds: if metrics.completed_tasks > 0 {
+                metrics.total_execution_time / metrics.completed_tasks as f64
+            } else {
+                0.0
+            },
+            tool_usage: metrics.tool_usage.clone(),
+            error_counts: metrics.error_counts.clone(),
+            system_metrics: metrics.system_metrics.clone(),
+        }
+    }
+}
+```
+
+#### 5. AI 理解引擎 (UnderstandingEngine)
 
 负责理解和分析用户任务，制定执行策略。
 
@@ -404,7 +704,68 @@ pub enum ModelProvider {
 
 ## 使用示例
 
-### 基础使用
+### 服务架构使用
+
+#### 1. HTTP 服务部署
+
+**启动 HTTP 服务：**
+
+```bash
+# 构建并运行 HTTP 服务器
+cargo run --bin ai-agent-server
+
+# 或使用 Docker
+docker build -t ai-agent-service .
+docker run -p 8080:8080 ai-agent-service
+```
+
+**HTTP API 使用：**
+
+```bash
+# 通过 HTTP 执行任务
+curl -X POST http://localhost:8080/api/v1/tasks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "task": "分析此项目并创建摘要",
+    "priority": "high"
+  }'
+
+# 获取服务状态
+curl http://localhost:8080/api/v1/status
+
+# 获取指标
+curl http://localhost:8080/api/v1/metrics
+```
+
+#### 2. Rust API 集成
+
+```rust
+use ai_agent::{
+    service::{AiAgentService, ServiceConfig, AiAgentClient, ApiClientBuilder},
+    config::AgentConfig
+};
+use std::sync::Arc;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // 创建服务实例
+    let service = Arc::new(AiAgentService::new(
+        ServiceConfig::default(),
+        AgentConfig::load_with_fallback("config.toml")?
+    ).await?);
+
+    // 创建进程内客户端
+    let client = AiAgentClient::new(ApiClientBuilder::in_process(service));
+
+    // 执行简单任务
+    let response = client.execute_simple_task("创建一个 Hello World 程序").await?;
+    println!("结果: {}", response.result.unwrap().summary);
+
+    Ok(())
+}
+```
+
+### 基础 CLI 使用
 
 ```rust
 #[tokio::main]
@@ -496,25 +857,48 @@ agent.register_tool(GitStatusTool).await;
 - ⚠️ Zhipu 模型集成（占位符）
 - ⚠️ 本地模型集成（占位符）
 
-### 📋 第三阶段：扩展功能 - 待办
+### ✅ 第三阶段：服务架构 - 已完成
+- ✅ 服务导向架构设计
+- ✅ 双接口系统（Rust API + HTTP REST）
+- ✅ 带资源管理的并发任务处理
+- ✅ 全面的指标收集和监控
+- ✅ 基于 Axum 的 HTTP 服务器实现
+- ✅ 带进程内和 HTTP 客户端的服务 API trait
+- ✅ 异常处理和服务特定类型
+- ✅ 服务部署的配置管理
+- ✅ Docker 容器化和部署设置
+- ✅ API 文档和使用示例
+- ✅ 健康监控和指标端点
+
+### 📋 第四阶段：扩展功能 - 待办
 - 更多编程工具（Git、包管理器等）
 - 工具插件系统
 - 自定义工具开发指南
+- WebSocket 实时更新
+- 高级认证和授权
 
-### 📋 第四阶段：用户体验 - 待办
+### 📋 第五阶段：用户体验 - 待办
 - CLI 界面优化
-- 进度显示
+- 进度显示和任务监控
 - 配置管理工具
+- 服务管理的 Web 仪表板
 
 ## 技术栈
 
 - **语言**: Rust（性能、内存安全、并发）
 - **异步运行时**: Tokio
 - **HTTP 客户端**: Reqwest
+- **HTTP 服务器**: Axum（用于 REST API 服务）
 - **JSON 处理**: Serde
 - **配置**: TOML
 - **CLI**: Clap
 - **日志**: Tracing
+- **指标**: Metrics crate 与 Prometheus 导出器
+- **Web 框架**: Tower 用于 HTTP 中间件
+- **序列化**: Serde JSON 用于 API 通信
+- **容器化**: Docker 多阶段构建
+- **监控**: Prometheus + Grafana 集成
+- **异步 Trait**: async-trait 用于 API trait 定义
 
 ## 成功指标
 
@@ -527,14 +911,28 @@ agent.register_tool(GitStatusTool).await;
 - [x] 配置管理
 - [x] CLI 界面
 - [x] 任务处理工作流
+- [x] **带双接口的服务导向架构**
+- [x] **带综合端点的 HTTP REST API**
+- [x] **用于进程内使用的 Rust API 库**
+- [x] **带资源管理的并发任务处理**
+- [x] **指标收集和监控系统**
+- [x] **Docker 部署配置**
+- [x] **健康监控和状态端点**
+- [x] **批量任务执行支持**
+- [x] **实时任务跟踪功能**
 
 ### 📊 当前状态
-- **架构**: ✅ 完整且功能正常
-- **核心功能**: ✅ 理解、执行、工具
+- **架构**: ✅ 完整且功能正常的服务导向设计
+- **核心功能**: ✅ 理解、执行、工具、指标、监控
+- **接口**: ✅ 双接口系统（Rust API + HTTP REST）
+- **并发性**: ✅ 带资源管理的并发任务处理
 - **可扩展性**: ✅ 易于扩展的工具系统
 - **错误处理**: ✅ 全面的错误类型和重试逻辑
 - **配置**: ✅ 文件和环境变量支持
 - **CLI**: ✅ 交互式和批处理模式
+- **服务**: ✅ 带健康监控的生产就绪 HTTP 服务
+- **部署**: ✅ Docker 容器化和部署设置
+- **监控**: ✅ Prometheus 指标和 Grafana 集成
 
 ## 实现细节
 
@@ -605,12 +1003,16 @@ file = "agent.log"
 
 1. **真正的 AI-Native**: AI 拥有完全的决策自由
 2. **模型无关**: 不绑定特定的 AI 提供商
-3. **极简设计**: 专注核心功能，避免过度复杂
-4. **开放架构**: 不依赖特定约定，高度可扩展
-5. **高可靠性**: 完善的异常处理和恢复机制
-6. **易于维护**: 清晰的模块边界和简单的接口
+3. **服务导向架构**: 生产就绪的双接口（Rust API + HTTP REST）
+4. **极简设计**: 专注核心功能，避免过度复杂
+5. **开放架构**: 不依赖特定约定，高度可扩展
+6. **高可靠性**: 完善的异常处理和恢复机制
+7. **易于维护**: 清晰的模块边界和简单的接口
+8. **生产就绪**: Docker 部署、健康检查和监控
+9. **语言无关**: HTTP API 支持任何编程语言集成
+10. **可扩展设计**: 带资源管理的并发任务处理
 
-这个设计为构建一个真正智能、灵活、可靠的代码助手系统奠定了基础。通过模块化架构和清晰的接口设计，系统可以轻松适应和扩展到不同的使用场景。
+这个设计为构建一个真正智能、灵活、可靠的代码助手系统奠定了基础，该系统可以作为独立服务部署。通过模块化架构和清晰的接口设计，系统可以轻松适应和扩展到不同的使用场景，同时保持企业级的可靠性和可观察性。
 
 ## 当前状态
 
@@ -622,5 +1024,18 @@ AI-Native 代码助手**已实现并可运行**，具备：
 - ✅ 全面的错误处理
 - ✅ 配置管理
 - ✅ CLI 接口
+- ✅ **带双接口的完整服务架构**
+- ✅ **带综合端点的 HTTP REST API**
+- ✅ **用于直接集成的 Rust API 库**
+- ✅ **并发任务处理和资源管理**
+- ✅ **指标收集和监控系统**
+- ✅ **Docker 部署配置**
+- ✅ **健康监控和状态检查**
+- ✅ **生产就绪的部署设置**
 
-**下一步：** 基础已完成，可以投入生产使用，只需集成模型 API 和添加更多工具。
+**下一步：** 基础已完成并可投入生产使用。服务架构为以下方面提供了坚实的基础：
+- 模型 API 集成和更多工具
+- 处理生产工作负载的扩展
+- 集成到现有应用程序和工作流中
+- 增强的监控和可观察性功能
+- 高级认证和授权机制

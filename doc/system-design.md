@@ -23,7 +23,7 @@ This project builds a minimal AI-native code assistant system focused on core ca
 
 ### 4. Open Architecture
 - No dependency on agents.md or other convention files
-- No adherence to Codex or Roo specific specifications
+- No adherence to specific external specifications
 - Support custom tools and extensions
 
 ## System Architecture
@@ -31,34 +31,332 @@ This project builds a minimal AI-native code assistant system focused on core ca
 ### Overall Architecture Diagram
 
 ```
-┌─────────────────┐
-│   User Input     │
-└─────────┬───────┘
-          │
-┌─────────▼───────┐
-│ AI Understanding │
-│   Engine         │
-│  - Task Understanding │
-│  - Goal Analysis   │
-│  - Strategy Formulation │
-└─────────┬───────┘
-          │
-┌─────────▼───────┐
-│ AI Execution     │
-│   Engine         │
-│  - Tool Selection │
-│  - Step Execution │
-│  - Dynamic Adjustment │
-└─────────┬───────┘
-          │
-┌─────────▼───────┐
-│   Result Output  │
-└─────────────────┘
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   CLI Client    │    │  Rust Client   │    │  HTTP Client    │
+└─────────┬───────┘    └─────────┬───────┘    └─────────┬───────┘
+          │                      │                      │
+          └──────────────────────┼──────────────────────┘
+                                 │
+                    ┌─────────────┴─────────────┐
+                    │    AI Agent Service     │
+                    │  (Core Business Logic)  │
+                    └─────────────┬─────────────┘
+                                 │
+          ┌──────────────────────┼──────────────────────┘
+          │                      │                      │
+    ┌─────┴─────┐        ┌──────┴───────┐        ┌──────┴─────┐
+    │  Models   │        │   Tools     │        │  Metrics   │
+    │ (Zhipu,   │        │ (File Ops,  │        │ (Prometheus│
+    │ OpenAI,   │        │ Commands,  │        │  Export)   │
+    │ etc.)     │        │ etc.)       │        │            │
+    └───────────┘        └─────────────┘        └────────────┘
+```
+
+### Service Architecture
+
+The AI-Native Code Agent has been transformed into a standalone service that supports multiple interfaces:
+
+#### 1. Service Layer Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    AI Agent Service                         │
+├─────────────────────────────────────────────────────────────┤
+│  Service API Layer                                          │
+│  ├─ Rust API (AiAgentApi trait)                           │
+│  ├─ HTTP REST API (Axum server)                           │
+│  └─ WebSocket API (real-time updates)                      │
+├─────────────────────────────────────────────────────────────┤
+│  Core Business Logic                                        │
+│  ├─ Task Understanding & Planning                          │
+│  ├─ Execution Engine                                       │
+│  ├─ Tool Management                                       │
+│  └─ Concurrent Task Processing                            │
+├─────────────────────────────────────────────────────────────┤
+│  Infrastructure Layer                                       │
+│  ├─ Metrics Collection                                    │
+│  ├─ Error Handling                                        │
+│  ├─ Configuration Management                              │
+│  └─ Health Monitoring                                     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### 2. Dual Interface Design
+
+**Rust API Interface:**
+- Direct in-process usage
+- Zero overhead communication
+- Type-safe interfaces
+- Ideal for Rust applications
+
+**HTTP REST API Interface:**
+- Language-agnostic access
+- Standard RESTful endpoints
+- JSON request/response format
+- Easy integration with any application
+
+#### 3. Task Processing Flow
+
+```
+User Request → API Layer → Service Core → AI Understanding → Execution Planning → Tool Execution → Result → API Response
 ```
 
 ### Core Components
 
-#### 1. AI Understanding Engine (UnderstandingEngine)
+#### 1. AI Agent Service (AiAgentService)
+
+The central service component that coordinates all operations and provides both Rust API and HTTP interfaces.
+
+**File Location:** `src/service/core.rs`
+
+```rust
+pub struct AiAgentService {
+    config: ServiceConfig,
+    metrics: Arc<MetricsCollector>,
+    agent: Arc<RwLock<CodeAgent>>,
+    active_tasks: Arc<RwLock<HashMap<String, Arc<RwLock<TaskContext>>>>,
+    task_semaphore: Arc<Semaphore>,
+    available_tools: Vec<String>,
+}
+
+impl AiAgentService {
+    pub async fn new(
+        service_config: ServiceConfig,
+        agent_config: AgentConfig
+    ) -> Result<Self, ServiceError> {
+        // Initialize service with configuration
+    }
+
+    pub async fn execute_task(&self, request: TaskRequest) -> Result<TaskResponse, ServiceError> {
+        // Concurrent task execution with resource management
+        let _permit = self.task_semaphore.acquire().await?;
+
+        let task_id = request.task_id.clone()
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+
+        // Execute task through AI agent
+        let result = self.agent.read().await
+            .process_task(&request.task).await?;
+
+        // Collect metrics and return response
+        self.metrics.record_task_completion(
+            execution_time,
+            result.is_success()
+        ).await;
+
+        Ok(TaskResponse {
+            task_id,
+            status: TaskStatus::Completed,
+            result: Some(result),
+            metrics: self.metrics.get_metrics_snapshot().await,
+            ..
+        })
+    }
+
+    pub async fn execute_batch(&self, request: BatchTaskRequest) -> Result<BatchTaskResponse, ServiceError> {
+        // Handle concurrent batch task execution
+        match request.mode {
+            BatchExecutionMode::Parallel => {
+                // Execute tasks concurrently with controlled parallelism
+                let tasks = request.tasks.into_iter()
+                    .map(|task| self.execute_task(task))
+                    .collect::<Vec<_>>();
+
+                let results = futures::future::join_all(tasks).await;
+                // Process results and compile batch response
+            }
+            BatchExecutionMode::Sequential => {
+                // Execute tasks one by one
+            }
+        }
+    }
+}
+```
+
+#### 2. Service API Layer
+
+Provides both Rust API trait and HTTP REST endpoints.
+
+**File Location:** `src/service/api.rs`
+
+```rust
+#[async_trait]
+pub trait AiAgentApi: Send + Sync {
+    async fn execute_task(&self, request: TaskRequest) -> ServiceResult<TaskResponse>;
+    async fn execute_batch(&self, request: BatchTaskRequest) -> ServiceResult<BatchTaskResponse>;
+    async fn get_task_status(&self, task_id: &str) -> ServiceResult<TaskResponse>;
+    async fn cancel_task(&self, task_id: &str) -> ServiceResult<()>;
+    async fn get_service_status(&self) -> ServiceResult<ServiceStatus>;
+    async fn get_metrics(&self) -> ServiceResult<MetricsSnapshot>;
+}
+
+// In-process API implementation
+pub struct InProcessApi {
+    service: Arc<AiAgentService>,
+}
+
+#[async_trait]
+impl AiAgentApi for InProcessApi {
+    async fn execute_task(&self, request: TaskRequest) -> ServiceResult<TaskResponse> {
+        self.service.execute_task(request).await
+    }
+    // ... other implementations
+}
+
+// HTTP client implementation
+pub struct HttpClientApi {
+    client: reqwest::Client,
+    base_url: String,
+    api_key: Option<String>,
+}
+
+#[async_trait]
+impl AiAgentApi for HttpClientApi {
+    async fn execute_task(&self, request: TaskRequest) -> ServiceResult<TaskResponse> {
+        let response = self.client
+            .post(&format!("{}/api/v1/tasks", self.base_url))
+            .json(&request)
+            .send()
+            .await?;
+
+        response.json::<TaskResponse>().await
+            .map_err(|e| ServiceError::NetworkError(e.to_string()))
+    }
+    // ... other implementations
+}
+```
+
+#### 3. HTTP Server
+
+Axum-based HTTP server providing REST API endpoints.
+
+**File Location:** `src/server/main.rs`
+
+```rust
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = ServiceConfig::from_env()?;
+    let agent_config = AgentConfig::load_with_fallback("config.toml")?;
+
+    let service = Arc::new(AiAgentService::new(config, agent_config).await?);
+
+    let app = Router::new()
+        .route("/health", get(health_check))
+        .route("/api/v1/status", get(service_status))
+        .route("/api/v1/metrics", get(get_metrics))
+        .route("/api/v1/tools", get(list_tools))
+        .route("/api/v1/tasks", post(execute_task))
+        .route("/api/v1/tasks/batch", post(execute_batch))
+        .route("/api/v1/tasks/:id", get(get_task_status))
+        .route("/api/v1/tasks/:id", delete(cancel_task))
+        .layer(
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods([Method::GET, Method::POST, Method::DELETE])
+                .allow_headers(Any)
+        )
+        .layer(TraceLayer::new_for_http())
+        .with_state(AppState { service });
+
+    let listener = tokio::net::TcpListener::bind(&config.bind_address).await?;
+    tracing::info!("AI Agent Service listening on {}", config.bind_address);
+
+    axum::serve(listener, app).await?;
+    Ok(())
+}
+
+// API endpoint handlers
+async fn execute_task(
+    State(state): State<AppState>,
+    Json(request): Json<TaskRequest>,
+) -> Result<Json<TaskResponse>, ServiceError> {
+    let response = state.service.execute_task(request).await?;
+    Ok(Json(response))
+}
+
+async fn execute_batch(
+    State(state): State<AppState>,
+    Json(request): Json<BatchTaskRequest>,
+) -> Result<Json<BatchTaskResponse>, ServiceError> {
+    let response = state.service.execute_batch(request).await?;
+    Ok(Json(response))
+}
+```
+
+#### 4. Metrics and Monitoring
+
+Comprehensive metrics collection and monitoring system.
+
+**File Location:** `src/service/metrics_simple.rs`
+
+```rust
+pub struct MetricsCollector {
+    start_time: Instant,
+    metrics: Arc<RwLock<ServiceMetrics>>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ServiceMetrics {
+    pub total_tasks: u64,
+    pub completed_tasks: u64,
+    pub failed_tasks: u64,
+    pub active_tasks: u64,
+    pub total_execution_time: f64,
+    pub task_execution_times: Vec<f64>,
+    pub tool_usage: HashMap<String, u64>,
+    pub error_counts: HashMap<String, u64>,
+    pub system_metrics: SystemMetrics,
+}
+
+impl MetricsCollector {
+    pub async fn record_task_start(&self) {
+        let mut metrics = self.metrics.write().await;
+        metrics.total_tasks += 1;
+        metrics.active_tasks += 1;
+    }
+
+    pub async fn record_task_completion(&self, execution_time: f64, success: bool) {
+        let mut metrics = self.metrics.write().await;
+
+        if metrics.active_tasks > 0 {
+            metrics.active_tasks -= 1;
+        }
+
+        if success {
+            metrics.completed_tasks += 1;
+        } else {
+            metrics.failed_tasks += 1;
+        }
+
+        metrics.task_execution_times.push(execution_time);
+        // Keep only last 1000 execution times
+        if metrics.task_execution_times.len() > 1000 {
+            metrics.task_execution_times.remove(0);
+        }
+    }
+
+    pub async fn get_metrics_snapshot(&self) -> MetricsSnapshot {
+        let metrics = self.metrics.read().await;
+        MetricsSnapshot {
+            uptime_seconds: self.start_time.elapsed().as_secs(),
+            total_tasks: metrics.total_tasks,
+            completed_tasks: metrics.completed_tasks,
+            failed_tasks: metrics.failed_tasks,
+            active_tasks: metrics.active_tasks,
+            average_execution_time_seconds: if metrics.completed_tasks > 0 {
+                metrics.total_execution_time / metrics.completed_tasks as f64
+            } else {
+                0.0
+            },
+            tool_usage: metrics.tool_usage.clone(),
+            error_counts: metrics.error_counts.clone(),
+            system_metrics: metrics.system_metrics.clone(),
+        }
+    }
+}
+```
+
+#### 5. AI Understanding Engine (UnderstandingEngine)
 
 Responsible for understanding and analyzing user tasks, formulating execution strategies.
 
@@ -406,7 +704,252 @@ pub enum ModelProvider {
 
 ## Usage Examples
 
-### Basic Usage
+### Service Architecture Usage
+
+#### 1. HTTP Service Deployment
+
+**Start the HTTP service:**
+
+```bash
+# Build and run the HTTP server
+cargo run --bin ai-agent-server
+
+# Or use Docker
+docker build -t ai-agent-service .
+docker run -p 8080:8080 ai-agent-service
+```
+
+**HTTP API Usage:**
+
+```bash
+# Execute a task via HTTP
+curl -X POST http://localhost:8080/api/v1/tasks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "task": "Analyze this project and create a summary",
+    "priority": "high"
+  }'
+
+# Batch task execution
+curl -X POST http://localhost:8080/api/v1/tasks/batch \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tasks": [
+      {"task": "Task 1 description"},
+      {"task": "Task 2 description"}
+    ],
+    "mode": "parallel"
+  }'
+
+# Get service status
+curl http://localhost:8080/api/v1/status
+
+# Get metrics
+curl http://localhost:8080/api/v1/metrics
+```
+
+#### 2. Rust API Integration
+
+**In-Process Service Usage:**
+
+```rust
+use ai_agent::{
+    service::{AiAgentService, ServiceConfig, AiAgentClient, ApiClientBuilder},
+    config::AgentConfig
+};
+use std::sync::Arc;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Create service instance
+    let service = Arc::new(AiAgentService::new(
+        ServiceConfig::default(),
+        AgentConfig::load_with_fallback("config.toml")?
+    ).await?);
+
+    // Create in-process client
+    let client = AiAgentClient::new(ApiClientBuilder::in_process(service));
+
+    // Execute simple task
+    let response = client.execute_simple_task("Create a Hello World program").await?;
+    println!("Result: {}", response.result.unwrap().summary);
+
+    // Execute task with context
+    let mut env = HashMap::new();
+    env.insert("PATH".to_string(), "/usr/bin".to_string());
+    let response = client.execute_task_with_context(
+        "List files in directory",
+        Some("/tmp"),
+        Some(env)
+    ).await?;
+
+    // Execute batch tasks
+    let batch_request = BatchTaskRequest {
+        tasks: vec![
+            TaskRequest { task: "Read README.md".to_string(), ..Default::default() },
+            TaskRequest { task: "Check git status".to_string(), ..Default::default() },
+        ],
+        mode: BatchExecutionMode::Parallel,
+        continue_on_error: true,
+    };
+    let batch_response = client.execute_batch(batch_request).await?;
+
+    println!("Completed {} out of {} tasks",
+        batch_response.statistics.completed_tasks,
+        batch_response.statistics.total_tasks
+    );
+
+    Ok(())
+}
+```
+
+**HTTP Client Usage:**
+
+```rust
+use ai_agent::{
+    service::{AiAgentClient, ApiClientBuilder},
+    service_types::TaskRequest
+};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Create HTTP client
+    let client = AiAgentClient::new(
+        ApiClientBuilder::http_with_auth("http://localhost:8080", "your-api-key")
+    );
+
+    // Execute task
+    let request = TaskRequest {
+        task: "Analyze the codebase structure".to_string(),
+        priority: Some(TaskPriority::High),
+        context: Some(TaskContext {
+            working_directory: Some("/path/to/project".to_string()),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    let response = client.execute_task(request).await?;
+    println!("Task completed: {}", response.result.unwrap().summary);
+
+    // Monitor task progress
+    let task_id = response.task_id.clone();
+    loop {
+        let status = client.get_task_status(&task_id).await?;
+        match status.status {
+            TaskStatus::Completed => {
+                println!("Task completed successfully");
+                break;
+            }
+            TaskStatus::Failed => {
+                println!("Task failed: {:?}", status.error);
+                break;
+            }
+            _ => {
+                println!("Task in progress...");
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            }
+        }
+    }
+
+    Ok(())
+}
+```
+
+#### 3. Docker Deployment
+
+**Docker Compose Setup:**
+
+```yaml
+version: '3.8'
+services:
+  ai-agent-service:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - AI_AGENT_API_KEY=your-api-key
+      - AI_AGENT_MODEL_PROVIDER=zhipu
+      - AI_AGENT_LOG_LEVEL=info
+    volumes:
+      - ./workspace:/workspace
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-storage:/var/lib/grafana
+
+volumes:
+  grafana-storage:
+```
+
+**Kubernetes Deployment:**
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-agent-service
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ai-agent-service
+  template:
+    metadata:
+      labels:
+        app: ai-agent-service
+    spec:
+      containers:
+      - name: ai-agent
+        image: ai-agent-service:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: AI_AGENT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ai-agent-secrets
+              key: api-key
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-agent-service
+spec:
+  selector:
+    app: ai-agent-service
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: ClusterIP
+```
+
+### Basic CLI Usage
 
 ```rust
 #[tokio::main]
@@ -498,25 +1041,48 @@ agent.register_tool(GitStatusTool).await;
 - ⚠️ Zhipu model integration (placeholder)
 - ⚠️ Local model integration (placeholder)
 
-### 📋 Phase 3: Extension Features - TODO
+### ✅ Phase 3: Service Architecture - COMPLETED
+- ✅ Service-oriented architecture design
+- ✅ Dual interface system (Rust API + HTTP REST)
+- ✅ Concurrent task processing with resource management
+- ✅ Comprehensive metrics collection and monitoring
+- ✅ HTTP server implementation with Axum
+- ✅ Service API trait with in-process and HTTP clients
+- ✅ Error handling and service-specific types
+- ✅ Configuration management for service deployment
+- ✅ Docker containerization and deployment setup
+- ✅ API documentation and usage examples
+- ✅ Health monitoring and metrics endpoints
+
+### 📋 Phase 4: Extension Features - TODO
 - More programming tools (Git, package managers, etc.)
 - Tool plugin system
 - Custom tool development guide
+- WebSocket real-time updates
+- Advanced authentication and authorization
 
-### 📋 Phase 4: User Experience - TODO
+### 📋 Phase 5: User Experience - TODO
 - CLI interface optimization
-- Progress display
+- Progress display and task monitoring
 - Configuration management tool
+- Web dashboard for service management
 
 ## Technical Stack
 
 - **Language**: Rust (performance, memory safety, concurrency)
 - **Async Runtime**: Tokio
 - **HTTP Client**: Reqwest
+- **HTTP Server**: Axum (for REST API service)
 - **JSON Processing**: Serde
 - **Configuration**: TOML
 - **CLI**: Clap
 - **Logging**: Tracing
+- **Metrics**: Metrics crate with Prometheus exporter
+- **Web Framework**: Tower for HTTP middleware
+- **Serialization**: Serde JSON for API communication
+- **Containerization**: Docker with multi-stage builds
+- **Monitoring**: Prometheus + Grafana integration
+- **Async Traits**: async-trait for API trait definitions
 
 ## Success Metrics
 
@@ -529,14 +1095,28 @@ agent.register_tool(GitStatusTool).await;
 - [x] Configuration management
 - [x] CLI interface
 - [x] Task processing workflow
+- [x] **Service-oriented architecture with dual interfaces**
+- [x] **HTTP REST API with comprehensive endpoints**
+- [x] **Rust API library for in-process usage**
+- [x] **Concurrent task processing with resource management**
+- [x] **Metrics collection and monitoring system**
+- [x] **Docker deployment configuration**
+- [x] **Health monitoring and status endpoints**
+- [x] **Batch task execution support**
+- [x] **Real-time task tracking capabilities**
 
 ### 📊 Current Status
-- **Architecture**: ✅ Complete and functional
-- **Core Features**: ✅ Understanding, Execution, Tools
+- **Architecture**: ✅ Complete and functional service-oriented design
+- **Core Features**: ✅ Understanding, Execution, Tools, Metrics, Monitoring
+- **Interfaces**: ✅ Dual interface system (Rust API + HTTP REST)
+- **Concurrency**: ✅ Concurrent task processing with resource management
 - **Extensibility**: ✅ Tool system for easy extension
 - **Error Handling**: ✅ Comprehensive error types and retry logic
 - **Configuration**: ✅ File and environment variable support
 - **CLI**: ✅ Interactive and batch modes
+- **Service**: ✅ Production-ready HTTP service with health monitoring
+- **Deployment**: ✅ Docker containerization and deployment setup
+- **Monitoring**: ✅ Prometheus metrics and Grafana integration
 
 ## Implementation Details
 
@@ -544,33 +1124,66 @@ agent.register_tool(GitStatusTool).await;
 
 ```
 src/
-├── lib.rs              # Public API exports
-├── main.rs             # Application entry point
-├── types.rs             # Core type definitions
-├── errors.rs           # Error types and handling
-├── config.rs            # Configuration management
-├── models.rs            # Language model implementations
-├── tools.rs             # Tool system and implementations
-├── understanding.rs      # Understanding engine
-├── execution.rs         # Execution engine
-├── agent.rs             # Main CodeAgent
-└── cli.rs               # CLI interface
+├── lib.rs                  # Public API exports
+├── main.rs                 # CLI application entry point
+├── server/
+│   └── main.rs            # HTTP server entry point
+├── types.rs                # Core type definitions
+├── errors.rs              # Error types and handling
+├── config.rs               # Configuration management
+├── models.rs               # Language model implementations
+├── tools.rs                # Tool system and implementations
+├── understanding.rs        # Understanding engine
+├── execution.rs           # Execution engine
+├── agent.rs                # Main CodeAgent
+├── cli.rs                  # CLI interface
+├── service_types.rs        # Service API data types
+└── service/
+    ├── mod.rs             # Service module exports
+    ├── core.rs            # Main AiAgentService implementation
+    ├── api.rs             # Service API trait and clients
+    ├── error.rs           # Service-specific error handling
+    └── metrics_simple.rs  # Metrics collection system
+
+examples/
+├── rust_client.rs         # Rust API usage examples
+├── http_client.rs         # HTTP client examples
+├── in_process_service.rs  # In-process service examples
+└── docker-compose.yml     # Complete deployment setup
+
+doc/
+├── system-design.md       # English system design documentation
+├── system-design-cn.md    # Chinese system design documentation
+└── SERVICE_API.md         # Complete API documentation
 ```
 
 ### 2. Data Flow
 
+**CLI Mode:**
 ```
-User Input → Understanding Engine → Task Plan → Execution Engine → Tools → Result
-```
-
-### 3. Tool Execution Flow
-
-```
-AI Decision → Tool Selection → Tool Execution → Result → Context Update → Next Decision
+User Input → CLI → Understanding Engine → Task Plan → Execution Engine → Tools → Result → CLI Output
 ```
 
-### 4. Configuration Format
+**Service Mode:**
+```
+Client Request → API Layer → Service Core → Understanding Engine → Task Plan → Execution Engine → Tools → Result → API Response → Client
+```
 
+### 3. Service Architecture Flow
+
+```
+HTTP Request/Rust API Call → AiAgentService → Task Queue → Concurrent Processing → Metrics Collection → Response
+```
+
+### 4. Tool Execution Flow
+
+```
+AI Decision → Tool Selection → Tool Execution → Result → Context Update → Metrics Recording → Next Decision
+```
+
+### 5. Configuration Format
+
+**Agent Configuration (config.toml):**
 ```toml
 # config.toml
 [model]
@@ -601,18 +1214,57 @@ level = "info"
 file = "agent.log"
 ```
 
+**Service Configuration:**
+```toml
+[service]
+max_concurrent_tasks = 10
+default_task_timeout = 300
+enable_metrics = true
+log_level = "info"
+
+[service.cors]
+allowed_origins = ["*"]
+allowed_methods = ["GET", "POST", "DELETE"]
+allowed_headers = ["*"]
+allow_credentials = false
+
+[service.rate_limiting]
+requests_per_minute = 60
+burst_size = 10
+```
+
+### 6. Binary Targets
+
+```toml
+[[bin]]
+name = "ai-agent"
+path = "src/main.rs"
+
+[[bin]]
+name = "ai-agent-server"
+path = "src/server/main.rs"
+
+[lib]
+name = "ai_agent"
+path = "src/lib.rs"
+```
+
 ## Summary
 
 The advantages of this design:
 
 1. **Truly AI-Native**: AI has complete decision freedom
 2. **Model Independent**: No binding to specific AI providers
-3. **Minimal Design**: Focus on core functionality, avoiding over-complexity
-4. **Open Architecture**: No dependency on specific conventions, highly extensible
-5. **High Reliability**: Complete error handling and recovery mechanisms
-6. **Easy Maintenance**: Clear module boundaries and straightforward interfaces
+3. **Service-Oriented Architecture**: Production-ready with dual interfaces (Rust API + HTTP REST)
+4. **Minimal Design**: Focus on core functionality, avoiding over-complexity
+5. **Open Architecture**: No dependency on specific conventions, highly extensible
+6. **High Reliability**: Complete error handling and recovery mechanisms
+7. **Easy Maintenance**: Clear module boundaries and straightforward interfaces
+8. **Production Ready**: Docker deployment, monitoring, and health checking
+9. **Language Agnostic**: HTTP API enables integration with any programming language
+10. **Scalable Design**: Concurrent task processing with resource management
 
-This design lays the foundation for building a truly intelligent, flexible, and reliable code assistant system. Through modular architecture and clear interface design, the system can easily adapt and expand to different usage scenarios.
+This design lays the foundation for building a truly intelligent, flexible, and reliable code assistant system that can be deployed as a standalone service. Through modular architecture and clear interface design, the system can easily adapt and expand to different usage scenarios while maintaining enterprise-grade reliability and observability.
 
 ## Current Status
 
@@ -624,5 +1276,18 @@ The AI-Native Code Agent is **implemented and functional** with:
 - ✅ Comprehensive error handling
 - ✅ Configuration management
 - ✅ CLI interface
+- ✅ **Complete service architecture with dual interfaces**
+- ✅ **HTTP REST API with comprehensive endpoints**
+- ✅ **Rust API library for direct integration**
+- ✅ **Concurrent task processing and resource management**
+- ✅ **Metrics collection and monitoring system**
+- ✅ **Docker deployment configuration**
+- ✅ **Health monitoring and status checking**
+- ✅ **Production-ready deployment setup**
 
-**Next Steps:** The foundation is complete and ready for production use with model API integrations and additional tools.
+**Next Steps:** The foundation is complete and ready for production use. The service architecture provides a robust foundation for:
+- Model API integrations and additional tools
+- Scaling to handle production workloads
+- Integration into existing applications and workflows
+- Enhanced monitoring and observability features
+- Advanced authentication and authorization mechanisms

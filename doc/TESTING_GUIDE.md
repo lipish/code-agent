@@ -4,22 +4,29 @@
 
 1. **Set Environment Variable:**
    ```bash
-   export ZHIPU_API_KEY=d2a0da2b02954b1f91a0a4ec16d4521b.GA2Tz9sF9kt4zVd3
+   export ZHIPU_API_KEY=your-api-key-here
+   # Or copy .env.example to .env and configure there
    ```
 
-2. **Check Configuration:**
+2. **Test CLI Interface:**
    ```bash
-   cargo run -- config
+   cargo run -- task "测试任务"
    ```
 
-3. **Verify Tools:**
+3. **Test HTTP Service:**
    ```bash
-   cargo run -- tools
+   # Start the service
+   cargo run --bin ai-agent-server
+
+   # In another terminal, test the API
+   curl -X POST http://localhost:8080/api/v1/tasks \
+     -H "Content-Type: application/json" \
+     -d '{"task": "测试任务"}'
    ```
 
 ## Testing Methods
 
-### 1. Single Task Testing
+### 1. CLI Testing
 
 ```bash
 # Basic conversation
@@ -38,46 +45,84 @@ cargo run -- task "Run 'cargo check' and show me the results."
 cargo run -- task "Create a file called test.txt with the content 'Hello World'."
 ```
 
-### 2. Interactive Mode
+### 2. HTTP Service Testing
+
+```bash
+# Start the service
+cargo run --bin ai-agent-server
+
+# Test health endpoint
+curl http://localhost:8080/health
+
+# Test service status
+curl http://localhost:8080/api/v1/status
+
+# Test task execution
+curl -X POST http://localhost:8080/api/v1/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"task": "Read README.md and summarize"}'
+
+# Test batch tasks
+curl -X POST http://localhost:8080/api/v1/tasks/batch \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tasks": [
+      {"task": "List files in current directory"},
+      {"task": "Show git status"}
+    ],
+    "mode": "parallel"
+  }'
+
+# Get metrics
+curl http://localhost:8080/api/v1/metrics
+```
+
+### 3. Interactive Mode
 
 ```bash
 cargo run -- interactive
 ```
 
-In interactive mode, you can use these commands:
-- `help` - Show available commands
-- `tools` - List available tools
-- `exit` or `quit` - Exit the program
-- Any other text will be processed as a task
-
-### 3. Configuration Testing
+### 4. Rust API Testing
 
 ```bash
-# Check current configuration
-cargo run -- config
-
-# Test with different config files
-cargo run -- config --config my_config.toml
+# Run Rust client examples
+cargo run --example rust_client
+cargo run --example http_client
+cargo run --example in_process_service
 ```
 
-### 4. Automated Testing
+### 5. Docker Testing
 
 ```bash
-# Run the comprehensive test suite
-./test_agent.sh
+# Build Docker image
+docker build -t ai-agent-service .
 
-# Test individual scenarios
-cargo run -- task "What files are in the src directory?"
-cargo run -- task "Read Cargo.toml and show me the dependencies"
+# Run container
+docker run -p 8080:8080 \
+  -e AI_AGENT_API_KEY=your-api-key \
+  ai-agent-service
+
+# Test with Docker Compose
+cd examples
+docker-compose up -d
+```
+
 ```
 
 ## Test Categories
 
-### Basic Functionality Tests
-- [ ] Agent startup and initialization
+### CLI Tests
+- [ ] CLI startup and initialization
 - [ ] Configuration loading
 - [ ] Tool registration and discovery
-- [ ] Basic conversation without tools
+- [ ] Basic task execution
+
+### Service Tests
+- [ ] HTTP service startup and health checks
+- [ ] API endpoint functionality
+- [ ] Concurrent task handling
+- [ ] Metrics collection
 
 ### Tool-Specific Tests
 - [ ] **read_file**: Read various file types (txt, toml, rs)
@@ -90,6 +135,7 @@ cargo run -- task "Read Cargo.toml and show me the dependencies"
 - [ ] Error handling and recovery
 - [ ] Safety checks and blocked commands
 - [ ] Large file handling
+- [ ] Batch task execution
 
 ### Performance Tests
 - [ ] Response time measurement
@@ -104,11 +150,9 @@ cargo run -- task "Read Cargo.toml and show me the dependencies"
 # Test reading different file types
 cargo run -- task "Read config.toml and show me the model configuration"
 cargo run -- task "Read src/main.rs and summarize what it does"
-cargo run -- task "List all files in the src/models directory"
 
 # Test file writing
 cargo run -- task "Create a summary.txt file with a brief summary of this project"
-cargo run -- task "Write a Rust function to calculate fibonacci to a file called fib.rs"
 ```
 
 ### Command Execution
