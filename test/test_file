@@ -1,0 +1,15 @@
+This is a test file for the AI agent.
+It contains multiple lines of text.
+The AI agent should be able to read this file.
+This file is used for testing file operations.
+Project: AI-Native Code Agent
+Language: Rust
+Purpose: AI-powered coding assistant
+
+Features:
+- File reading and writing
+- Command execution
+- Directory operations
+- Interactive mode
+
+This is the end of the test file.

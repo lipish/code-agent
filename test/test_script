@@ -1,0 +1,21 @@
+#!/bin/bash
+
+# Test script for AI agent command execution
+echo "Hello from test script!"
+echo "Current directory: $(pwd)"
+echo "Date: $(date)"
+echo "User: $(whoami)"
+echo "This script demonstrates safe command execution"
+
+# List files in current directory
+echo ""
+echo "Files in current directory:"
+ls -la
+
+# Show system info
+echo ""
+echo "System information:"
+uname -a
+
+echo ""
+echo "Test script completed successfully!"

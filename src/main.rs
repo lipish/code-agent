@@ -1,41 +1,26 @@
-mod cli;
-mod llm;
-mod agent;
-mod context;
-mod tools;
+//! Main entry point for the AI-Native Code Agent
 
-use anyhow::Result;
+use ai_agent::cli::Cli;
 use clap::Parser;
-use cli::{Cli, Commands};
+use tracing::{info, error};
 
 #[tokio::main]
-async fn main() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .with_target(false)
-        .init();
+async fn main() -> anyhow::Result<()> {
+    // Initialize logging
+    tracing_subscriber::fmt::init();
 
     let cli = Cli::parse();
-    let working_dir = cli
-        .working_dir
-        .clone()
-        .unwrap_or_else(|| std::env::current_dir().expect("cwd"));
 
-    let mut agent = agent::Agent::new(agent::Config {
-        model: cli.model.clone(),
-        yes: cli.yes,
-        working_dir,
-    })?;
+    info!("Starting AI-Native Code Agent");
 
-    match cli.command {
-        Commands::Run => agent.repl().await?,
-        Commands::Exec { prompt } => agent.exec(&prompt).await?,
-        Commands::Plan { prompt } => {
-            let plan = agent.plan(&prompt).await?;
-            println!("{}", serde_json::to_string_pretty(&plan)?);
+    match cli.run().await {
+        Ok(_) => {
+            info!("Task completed successfully");
+            Ok(())
+        }
+        Err(e) => {
+            error!("Task failed: {}", e);
+            Err(e)
         }
     }
-
-    Ok(())
 }
-

@@ -1,39 +1,39 @@
-# AI-Native Code Agent
+# AI-Native 代码助手
 
-An AI-Native code assistant built with Rust, designed to maximize AI autonomy while providing reliable execution capabilities.
+一个用 Rust 构建的 AI-Native 代码助手，旨在最大化 AI 自主性，同时提供可靠的执行能力。
 
-## 概述
+## 项目概述
 
-本项目实现了一个极简的 AI-Native 代码助手，遵循给予 AI 模型最大决策自由度，同时保持安全性和可靠性的理念。与传统的强工作流代码助手不同，该系统信任 AI 的判断，并提供灵活的工具以实现自主任务执行。
+本项目实现了一个极简的 AI-Native 代码助手，核心设计理念是给予 AI 模型最大的决策自由度，同时确保系统的安全性和可靠性。与传统的强工作流代码助手不同，该系统充分信任 AI 的判断能力，提供灵活的工具集以实现自主任务执行。
 
-## 特性
+## 核心特性
 
-- **AI-Native 架构**：最大 AI 自主权，最小约束
-- **多模型支持**：兼容 OpenAI、Anthropic 和本地模型
+- **AI-Native 架构**：最大化 AI 自主权，最小化约束限制
+- **多模型支持**：支持 OpenAI、Anthropic 和本地模型
 - **工具系统**：可扩展的工具包，支持文件操作、命令执行等
-- **配置管理**：通过文件和环境变量灵活配置
+- **配置管理**：通过配置文件和环境变量进行灵活配置
 - **错误处理**：强大的错误恢复和重试机制
-- **交互模式**：交互式命令行界面执行任务
+- **交互模式**：提供交互式命令行界面进行任务执行
 
-## 架构
+## 系统架构
 
 系统围绕三个核心组件构建：
 
-1. **理解引擎**：分析和分解用户任务
-2. **执行引擎**：使用 AI 驱动决策执行任务
-3. **工具注册表**：管理和执行各种工具
+1. **理解引擎 (Understanding Engine)**：分析和分解用户任务
+2. **执行引擎 (Execution Engine)**：使用 AI 驱动的决策执行任务
+3. **工具注册表 (Tool Registry)**：管理和执行各种工具
 
 ## 快速开始
 
-### 先决条件
+### 环境要求
 
-- Rust 1.75+
+- Rust 1.75 或更高版本
 - OpenAI API 密钥或 Anthropic API 密钥（用于云模型）
-- 本地模型设置（可选，用于本地模型）
+- 本地模型设置（可选，用于本地模型部署）
 
-### 安装
+### 安装步骤
 
-1. 克隆仓库：
+1. 克隆项目仓库：
 ```bash
 git clone <repository-url>
 cd ai-agent
@@ -42,7 +42,7 @@ cd ai-agent
 2. 设置环境变量：
 ```bash
 cp .env.example .env
-# 使用你的 API 密钥编辑 .env
+# 编辑 .env 文件，填入你的 API 密钥
 ```
 
 3. 构建项目：
@@ -50,13 +50,13 @@ cp .env.example .env
 cargo build --release
 ```
 
-### 使用方法
+### 使用指南
 
 #### 单任务执行
 
 ```bash
-# 使用 OpenAI
-OPENAI_API_KEY=your_key cargo run -- task "读取 package.json 并添加测试脚本"
+# 使用 OpenAI 模型
+OPENAI_API_KEY=your_key cargo run -- task "读取 package.json 文件并添加测试脚本"
 
 # 使用配置文件
 cargo run -- task "创建 hello world 文件" --config config.toml --output json
@@ -68,27 +68,27 @@ cargo run -- task "创建 hello world 文件" --config config.toml --output json
 cargo run -- interactive
 ```
 
-#### 列出可用工具
+#### 查看可用工具
 
 ```bash
 cargo run -- tools
 ```
 
-#### 显示配置
+#### 显示当前配置
 
 ```bash
 cargo run -- config
 ```
 
-## 配置
+## 配置说明
 
-系统可以通过以下方式配置：
+系统支持多种配置方式：
 
 1. **配置文件**（`config.toml`）
 2. **环境变量**
 3. **命令行参数**
 
-### 配置示例
+### 配置文件示例
 
 ```toml
 [model]
@@ -120,14 +120,14 @@ console = true
 format = "pretty"
 ```
 
-## 可用工具
+## 内置工具
 
 - **read_file**：读取文件内容
 - **write_file**：向文件写入内容
 - **run_command**：执行 shell 命令
 - **list_files**：列出目录内容
 
-## 模型支持
+## 支持的模型
 
 ### OpenAI 模型
 - GPT-4、GPT-4 Turbo
@@ -140,7 +140,7 @@ format = "pretty"
 - Ollama 兼容模型
 - 自定义本地模型端点
 
-## 开发
+## 开发指南
 
 ### 项目结构
 
@@ -154,20 +154,20 @@ src/
 └── errors/         # 错误类型和处理
 ```
 
-### 构建
+### 构建命令
 
 ```bash
-# 调试构建
+# 调试版本构建
 cargo build
 
-# 发布构建
+# 发布版本构建
 cargo build --release
 
 # 运行测试
 cargo test
 ```
 
-### 添加新工具
+### 添加自定义工具
 
 实现 `Tool` trait：
 
@@ -189,7 +189,7 @@ impl Tool for MyTool {
     }
 
     async fn execute(&self, args: &ToolArgs) -> Result<ToolResult, ToolError> {
-        // 实现代码
+        // 实现具体功能
         Ok(ToolResult::text("任务完成".to_string()))
     }
 }
@@ -198,33 +198,41 @@ impl Tool for MyTool {
 ## 安全特性
 
 - **文件访问限制**：防止访问敏感系统文件
-- **命令阻止**：阻止危险的 shell 命令
-- **目录约束**：将文件操作限制在允许的目录中
-- **资源限制**：可配置的超时和步骤限制
+- **命令阻止机制**：阻止危险的 shell 命令执行
+- **目录约束**：将文件操作限制在允许的目录范围内
+- **资源限制**：可配置的超时时间和步骤限制
 
 ## 设计理念
 
-该代理采用 AI-Native 方法：
+该代理采用 AI-Native 设计方法：
 
-1. **信任 AI**：决策自主权最大化
-2. **最小约束**：只有必要的安全和操作限制
-3. **灵活执行**：AI 决定每个任务的最佳方法
-4. **强大的错误处理**：从失败中优雅恢复
+1. **信任 AI**：给予 AI 最大的决策自主权
+2. **最小约束**：只保留必要的安全和操作限制
+3. **灵活执行**：AI 自主决定每个任务的最佳执行方式
+4. **强大错误处理**：从失败中优雅恢复
 5. **可扩展性**：易于添加新工具和功能
 
-## 许可证
+## 开源协议
 
-MIT 许可证 - 详见 LICENSE 文件。
+MIT 协议 - 详见 LICENSE 文件。
 
-## 贡献
+## 贡献指南
 
-欢迎贡献！请随时提交 Pull Request。
+欢迎贡献代码！请随时提交 Pull Request。
 
-## 路线图
+## 发展路线图
 
-- [ ] 基于 Web 的界面
+- [ ] 基于 Web 的用户界面
 - [ ] 工具插件系统
 - [ ] 高级错误恢复策略
 - [ ] 性能优化
-- [ ] 与更多 AI 模型集成
+- [ ] 与更多 AI 模型的集成
 - [ ] 自定义工具开发框架
+
+## 技术亮点
+
+- **极简架构**：专注于核心功能，避免过度设计
+- **高度可扩展**：模块化设计，易于扩展新功能
+- **安全可靠**：完善的安全机制和错误处理
+- **多模型兼容**：支持主流 AI 模型和本地部署
+- **配置灵活**：多种配置方式，适应不同使用场景
