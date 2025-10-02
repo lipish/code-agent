@@ -1,18 +1,36 @@
 [package]
 name = "ai-agent"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["AI Agent Team"]
-description = "AI-Native Code Assistant"
+description = "AI-Native Code Assistant Service"
 license = "MIT"
+repository = "https://github.com/lipish/code-agent"
+
+[[bin]]
+name = "ai-agent"
+path = "src/main.rs"
+
+[[bin]]
+name = "ai-agent-server"
+path = "src/server/main.rs"
+
+[lib]
+name = "ai_agent"
+path = "src/lib.rs"
 
 [dependencies]
 # Async runtime
 tokio = { version = "1.0", features = ["full"] }
 async-trait = "0.1"
+futures = "0.3"
 
-# HTTP clients
+# HTTP server and client
 reqwest = { version = "0.11", features = ["json"] }
+warp = "0.3"
+axum = "0.7"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -30,7 +48,7 @@ clap = { version = "4.0", features = ["derive"] }
 
 # Logging
 tracing = "0.1"
-tracing-subscriber = "0.3"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Error handling
 anyhow = "1.0"
@@ -41,6 +59,17 @@ tokio-fs = "0.1"
 
 # Mocking for tests
 mockall = "0.12"
+
+# Metrics and monitoring
+metrics = "0.23"
+metrics-exporter-prometheus = "0.13"
+
+[features]
+default = []
+server = []
+
+[dev-dependencies]
+tokio-test = "0.4"
 
 [profile.release]
 opt-level = 3

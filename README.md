@@ -1,230 +1,454 @@
-# AI-Native Code Agent
+# AI-Native Code Agent Service
 
-An AI-Native code assistant built with Rust, designed to maximize AI autonomy while providing reliable execution capabilities.
+一个极简、AI原生化的代码助手服务，提供Rust API和HTTP REST接口，可集成到任何应用中。
 
-## 概述
+[![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](Dockerfile)
 
-本项目实现了一个极简的 AI-Native 代码助手，遵循给予 AI 模型最大决策自由度，同时保持安全性和可靠性的理念。与传统的强工作流代码助手不同，该系统信任 AI 的判断，并提供灵活的工具以实现自主任务执行。
+## 🎯 项目特点
 
-## 特性
+- **🏗️ 服务架构**: 可作为独立服务运行，提供标准API接口
+- **🤖 AI原生**: 从底层为AI自主性而构建，最大化AI能力
+- **🔗 双接口**: 提供Rust API和HTTP REST API两种使用方式
+- **⚡ 高性能**: 支持并发任务执行和实时监控
+- **🛠️ 工具集成**: 安全的文件操作、命令执行等工具系统
+- **📊 监控完备**: 内置指标收集和健康检查
+- **🐳 容器化**: 支持Docker部署和Kubernetes集群
+- **🔒 企业级**: 支持认证、限流、CORS等企业特性
 
-- **AI-Native 架构**：最大 AI 自主权，最小约束
-- **多模型支持**：兼容 OpenAI、Anthropic 和本地模型
-- **工具系统**：可扩展的工具包，支持文件操作、命令执行等
-- **配置管理**：通过文件和环境变量灵活配置
-- **错误处理**：强大的错误恢复和重试机制
-- **交互模式**：交互式命令行界面执行任务
+## 🚀 快速开始
 
-## 架构
+### 环境要求
 
-系统围绕三个核心组件构建：
+- Rust 1.70+
+- 配置的AI模型API密钥（Zhipu GLM-4、OpenAI GPT-4等）
 
-1. **理解引擎**：分析和分解用户任务
-2. **执行引擎**：使用 AI 驱动决策执行任务
-3. **工具注册表**：管理和执行各种工具
+### 方式一：命令行工具
 
-## 快速开始
-
-### 先决条件
-
-- Rust 1.75+
-- OpenAI API 密钥或 Anthropic API 密钥（用于云模型）
-- 本地模型设置（可选，用于本地模型）
-
-### 安装
-
-1. 克隆仓库：
 ```bash
-git clone <repository-url>
-cd ai-agent
-```
+# 克隆项目
+git clone https://github.com/lipish/code-agent.git
+cd code-agent
 
-2. 设置环境变量：
-```bash
+# 配置API密钥
 cp .env.example .env
-# 使用你的 API 密钥编辑 .env
+# 编辑 .env 文件，添加你的API密钥
+
+# 运行CLI
+cargo run -- task "分析这个项目并创建摘要"
 ```
 
-3. 构建项目：
+### 方式二：HTTP服务
+
 ```bash
-cargo build --release
+# 启动HTTP服务
+cargo run --bin ai-agent-server
+
+# 在另一个终端测试
+curl -X POST http://localhost:8080/api/v1/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"task": "Hello, AI Agent!"}'
 ```
 
-### 使用方法
-
-#### 单任务执行
+### 方式三：Docker部署
 
 ```bash
-# 使用 OpenAI
-OPENAI_API_KEY=your_key cargo run -- task "读取 package.json 并添加测试脚本"
+# 使用Docker Compose启动完整服务栈
+cd examples
+docker-compose up -d
 
-# 使用配置文件
-cargo run -- task "创建 hello world 文件" --config config.toml --output json
+# 访问服务
+curl http://localhost:8080/health
 ```
 
-#### 交互模式
+## 📋 使用方式
+
+### 1. Rust API 集成
+
+```rust
+use ai_agent::{
+    service::{AiAgentService, ServiceConfig, AiAgentClient, ApiClientBuilder},
+    config::AgentConfig
+};
+use std::sync::Arc;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // 创建服务实例
+    let service = Arc::new(AiAgentService::new(
+        ServiceConfig::default(),
+        AgentConfig::load_with_fallback("config.toml")?
+    ).await?);
+
+    // 创建客户端
+    let client = AiAgentClient::new(ApiClientBuilder::in_process(service));
+
+    // 执行任务
+    let response = client.execute_simple_task("创建一个Hello World程序").await?;
+    println!("结果: {}", response.result.unwrap().summary);
+
+    Ok(())
+}
+```
+
+### 2. HTTP REST API
 
 ```bash
+# 执行任务
+curl -X POST http://localhost:8080/api/v1/tasks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "task": "读取README.md文件并总结内容",
+    "priority": "high"
+  }'
+
+# 批量执行任务
+curl -X POST http://localhost:8080/api/v1/tasks/batch \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tasks": [
+      {"task": "任务1"},
+      {"task": "任务2"}
+    ],
+    "mode": "parallel"
+  }'
+
+# 获取任务状态
+curl http://localhost:8080/api/v1/tasks/{task_id}
+
+# 获取服务状态
+curl http://localhost:8080/api/v1/status
+
+# 获取指标
+curl http://localhost:8080/api/v1/metrics
+```
+
+### 3. 命令行工具
+
+```bash
+# 基本用法
+cargo run -- task "你的任务描述"
+
+# 交互模式
 cargo run -- interactive
+
+# 详细输出
+cargo run -- task "任务" --output verbose
+
+# JSON输出
+cargo run -- task "任务" --output json
 ```
 
-#### 列出可用工具
+## 🔧 配置
 
-```bash
-cargo run -- tools
-```
-
-#### 显示配置
-
-```bash
-cargo run -- config
-```
-
-## 配置
-
-系统可以通过以下方式配置：
-
-1. **配置文件**（`config.toml`）
-2. **环境变量**
-3. **命令行参数**
-
-### 配置示例
+### 基本配置 (config.toml)
 
 ```toml
 [model]
-provider = "openai"
-model_name = "gpt-4-turbo-preview"
-api_key = "${OPENAI_API_KEY}"
+provider = "zhipu"  # zhipu, openai, anthropic, local
+model_name = "glm-4"
+api_key = "your-api-key"
 max_tokens = 4000
 temperature = 0.7
 
 [execution]
-max_steps = 50
-timeout_seconds = 300
+max_steps = 10
 max_retries = 3
-retry_delay_seconds = 2
-
-[safety]
-enable_safety_checks = true
-allowed_directories = [".", "/tmp"]
-blocked_commands = ["rm -rf /", "format", "fdisk"]
+retry_delay_seconds = 1
+timeout_seconds = 300
 
 [tools]
-auto_discovery = true
-enabled_tools = ["read_file", "write_file", "run_command", "list_files"]
+enable_file_operations = true
+enable_command_execution = true
+working_directory = "."
+allowed_paths = [".", "./src"]
+forbidden_commands = ["rm -rf", "format", "fdisk"]
 
-[logging]
-level = "info"
-file = "agent.log"
-console = true
-format = "pretty"
+[service]
+max_concurrent_tasks = 10
+default_task_timeout = 300
+enable_metrics = true
+log_level = "info"
+
+[service.cors]
+allowed_origins = ["*"]
+allowed_methods = ["GET", "POST", "DELETE"]
+allowed_headers = ["*"]
+allow_credentials = false
+
+[service.rate_limiting]
+requests_per_minute = 60
+burst_size = 10
 ```
 
-## 可用工具
-
-- **read_file**：读取文件内容
-- **write_file**：向文件写入内容
-- **run_command**：执行 shell 命令
-- **list_files**：列出目录内容
-
-## 模型支持
-
-### OpenAI 模型
-- GPT-4、GPT-4 Turbo
-- GPT-3.5 Turbo
-
-### Anthropic 模型
-- Claude 3 Opus、Sonnet、Haiku
-
-### 本地模型
-- Ollama 兼容模型
-- 自定义本地模型端点
-
-## 开发
-
-### 项目结构
-
-```
-src/
-├── agent/          # 核心代理实现
-├── models/         # 语言模型适配器
-├── tools/          # 工具系统和实现
-├── config/         # 配置管理
-├── cli/            # 命令行界面
-└── errors/         # 错误类型和处理
-```
-
-### 构建
+### 环境变量
 
 ```bash
-# 调试构建
-cargo build
+# 服务配置
+AI_AGENT_MAX_CONCURRENT_TASKS=10
+AI_AGENT_DEFAULT_TASK_TIMEOUT=300
+AI_AGENT_ENABLE_METRICS=true
+AI_AGENT_LOG_LEVEL=info
 
-# 发布构建
-cargo build --release
+# 服务器配置
+BIND_ADDRESS=0.0.0.0:8080
 
-# 运行测试
-cargo test
+# AI模型配置
+AI_AGENT_MODEL_PROVIDER=zhipu
+AI_AGENT_MODEL_NAME=glm-4
+AI_AGENT_API_KEY=your-api-key
+
+# CORS配置
+AI_AGENT_CORS_ALLOWED_ORIGINS=*
 ```
 
-### 添加新工具
+## 📊 API 文档
 
-实现 `Tool` trait：
+### 核心 API 端点
 
-```rust
-use async_trait::async_trait;
-use crate::tools::{Tool, ToolResult, ToolError, ToolArgs};
+| 端点 | 方法 | 描述 |
+|------|------|------|
+| `/health` | GET | 健康检查 |
+| `/api/v1/status` | GET | 服务状态 |
+| `/api/v1/metrics` | GET | 服务指标 |
+| `/api/v1/tools` | GET | 可用工具 |
+| `/api/v1/tasks` | POST | 执行任务 |
+| `/api/v1/tasks/batch` | POST | 批量执行 |
+| `/api/v1/tasks/{id}` | GET | 任务状态 |
+| `/api/v1/tasks/{id}` | DELETE | 取消任务 |
 
-pub struct MyTool;
+### 任务请求格式
 
-#[async_trait]
-impl Tool for MyTool {
-    fn name(&self) -> &str { "my_tool" }
-    fn description(&self) -> &str { "我的工具描述" }
-
-    fn parameters(&self) -> Vec<Parameter> {
-        vec![
-            Parameter::required("param1", "string", "第一个参数"),
-        ]
+```json
+{
+  "task": "任务描述",
+  "task_id": "可选的自定义ID",
+  "context": {
+    "working_directory": "/path/to/dir",
+    "environment": {"VAR": "value"},
+    "tools": ["read_file", "write_file"],
+    "constraints": {
+      "max_execution_time": 300,
+      "max_steps": 10,
+      "allowed_paths": ["/safe/path"]
     }
-
-    async fn execute(&self, args: &ToolArgs) -> Result<ToolResult, ToolError> {
-        // 实现代码
-        Ok(ToolResult::text("任务完成".to_string()))
-    }
+  },
+  "priority": "low|normal|high|critical",
+  "metadata": {"key": "value"}
 }
 ```
 
-## 安全特性
+### 任务响应格式
 
-- **文件访问限制**：防止访问敏感系统文件
-- **命令阻止**：阻止危险的 shell 命令
-- **目录约束**：将文件操作限制在允许的目录中
-- **资源限制**：可配置的超时和步骤限制
+```json
+{
+  "task_id": "uuid",
+  "status": "completed",
+  "result": {
+    "success": true,
+    "summary": "任务摘要",
+    "details": "详细结果",
+    "artifacts": [],
+    "execution_time": 30
+  },
+  "plan": {
+    "understanding": "AI对任务的理解",
+    "approach": "AI的解决方法",
+    "complexity": "simple|moderate|complex",
+    "estimated_steps": 3,
+    "requirements": ["tool1", "tool2"]
+  },
+  "steps": [...],
+  "metrics": {...}
+}
+```
 
-## 设计理念
+## 🐳 Docker 部署
 
-该代理采用 AI-Native 方法：
+### 基础部署
 
-1. **信任 AI**：决策自主权最大化
-2. **最小约束**：只有必要的安全和操作限制
-3. **灵活执行**：AI 决定每个任务的最佳方法
-4. **强大的错误处理**：从失败中优雅恢复
-5. **可扩展性**：易于添加新工具和功能
+```bash
+# 构建镜像
+docker build -t ai-agent-service .
 
-## 许可证
+# 运行容器
+docker run -p 8080:8080 \
+  -e AI_AGENT_API_KEY=your-api-key \
+  ai-agent-service
+```
 
-MIT 许可证 - 详见 LICENSE 文件。
+### Docker Compose
 
-## 贡献
+```bash
+# 启动完整服务栈（包含监控）
+cd examples
+docker-compose up -d
 
-欢迎贡献！请随时提交 Pull Request。
+# 查看服务状态
+docker-compose ps
 
-## 路线图
+# 查看日志
+docker-compose logs -f ai-agent-service
+```
 
-- [ ] 基于 Web 的界面
-- [ ] 工具插件系统
-- [ ] 高级错误恢复策略
-- [ ] 性能优化
-- [ ] 与更多 AI 模型集成
-- [ ] 自定义工具开发框架
+### Kubernetes
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-agent-service
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ai-agent-service
+  template:
+    metadata:
+      labels:
+        app: ai-agent-service
+    spec:
+      containers:
+      - name: ai-agent
+        image: ai-agent-service:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: AI_AGENT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ai-agent-secrets
+              key: api-key
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-agent-service
+spec:
+  selector:
+    app: ai-agent-service
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: ClusterIP
+```
+
+## 📈 监控和指标
+
+### Prometheus 指标
+
+服务在 `/metrics` 端点导出Prometheus指标：
+
+- `ai_agent_requests_total` - API请求总数
+- `ai_agent_request_duration_seconds` - 请求耗时分布
+- `ai_agent_tasks_total` - 处理任务总数
+- `ai_agent_tasks_completed_total` - 完成任务数
+- `ai_agent_tasks_failed_total` - 失败任务数
+- `ai_agent_active_tasks` - 当前活跃任务数
+- `ai_agent_cpu_usage_percent` - CPU使用率
+- `ai_agent_memory_usage_mb` - 内存使用量
+
+### Grafana 仪表板
+
+使用提供的Docker Compose配置可以启动完整的监控栈：
+
+- **Grafana**: http://localhost:3000 (admin/admin)
+- **Prometheus**: http://localhost:9090
+
+## 🧪 测试
+
+### 单元测试
+```bash
+cargo test
+```
+
+### 集成测试
+```bash
+cd examples
+cargo run --example rust_client
+cargo run --example http_client
+cargo run --example in_process_service
+```
+
+### 负载测试
+```bash
+# 安装hey
+go install github.com/rakyll/hey@latest
+
+# 负载测试
+hey -n 1000 -c 50 \
+  -H "Content-Type: application/json" \
+  -d '{"task": "测试任务"}' \
+  http://localhost:8080/api/v1/tasks
+```
+
+## 🏗️ 架构
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Rust Client   │    │  HTTP Client    │    │  Other Clients  │
+└─────────┬───────┘    └─────────┬───────┘    └─────────┬───────┘
+          │                      │                      │
+          └──────────────────────┼──────────────────────┘
+                                 │
+                    ┌─────────────┴─────────────┐
+                    │    AI Agent Service     │
+                    │  (Core Business Logic)  │
+                    └─────────────┬─────────────┘
+                                 │
+          ┌──────────────────────┼──────────────────────┘
+          │                      │                      │
+    ┌─────┴─────┐        ┌──────┴───────┐        ┌──────┴─────┐
+    │  Models   │        │   Tools     │        │  Metrics   │
+    │ (Zhipu,   │        │ (File Ops,  │        │ (Prometheus│
+    │ OpenAI,   │        │ Commands,  │        │  Export)   │
+    │ etc.)     │        │ etc.)       │        │            │
+    └───────────┘        └─────────────┘        └────────────┘
+```
+
+## 🔒 安全性
+
+### 认证和授权
+- API密钥认证
+- 请求速率限制
+- CORS配置
+- 权限控制
+
+### 执行安全
+- 沙箱文件访问
+- 危险命令过滤
+- 超时保护
+- 资源限制
+
+## 🤝 贡献
+
+欢迎贡献！请查看 [CONTRIBUTING.md](CONTRIBUTING.md) 了解详情。
+
+## 📚 文档
+
+- [API文档](doc/SERVICE_API.md) - 详细的API参考
+- [系统设计](doc/system-design.md) - 架构设计文档
+- [部署指南](doc/DEPLOYMENT.md) - 生产部署指南
+- [示例代码](examples/README.md) - 完整使用示例
+
+## 📄 许可证
+
+MIT License - 详见 [LICENSE](LICENSE) 文件
+
+## 🔗 相关链接
+
+- [GitHub仓库](https://github.com/lipish/code-agent)
+- [Docker Hub](https://hub.docker.com/r/ai-agent/service)
+- [API文档](doc/SERVICE_API.md)
+
+---
+
+**AI-Native Code Agent Service** - 让AI能力轻松集成到任何应用中。

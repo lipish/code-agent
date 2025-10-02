@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  ai-agent-service:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - AI_AGENT_API_KEY=${ZHIPU_API_KEY}
+      - AI_AGENT_MODEL_PROVIDER=zhipu
+      - AI_AGENT_MODEL_NAME=glm-4
+      - AI_AGENT_MAX_CONCURRENT_TASKS=10
+      - AI_AGENT_DEFAULT_TASK_TIMEOUT=300
+      - AI_AGENT_ENABLE_METRICS=true
+      - AI_AGENT_LOG_LEVEL=info
+      - RUST_LOG=info
+    volumes:
+      - ./workspace:/workspace
+      - ./config.toml:/app/config.toml
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    restart: unless-stopped
+
+volumes:
+  prometheus_data:
+  grafana_data:
