@@ -1,12 +1,12 @@
 [package]
-name = "ai-agent"
+name = "code-agent"
 version = "0.2.0"
 edition = "2021"
 authors = ["AI Agent Team"]
 description = "AI-Native Code Assistant Library"
 license = "MIT"
 repository = "https://github.com/lipish/code-agent"
-keywords = ["ai", "code-assistant", "automation", "llm"]
+keywords = ["ai", "code-assistant", "automation", "llm", "ai-native"]
 categories = ["development-tools", "text-processing"]
 
 [lib]
