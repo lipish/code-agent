@@ -13,9 +13,9 @@ use crate::agent::CodeAgent;
 use crate::config::AgentConfig;
 use crate::errors::AgentError;
 use crate::models::{LanguageModel, ZhipuModel};
-use crate::service::*;
+use crate::service::{ServiceConfig, TaskRequest, TaskResponse, TaskStatus, ExecutionStep};
 use crate::service::error::{ServiceResult, ServiceErrorType, ErrorBuilder};
-use crate::service::metrics::MetricsCollector;
+use crate::service::metrics_simple::MetricsCollector;
 
 /// AI Agent Service
 #[derive(Debug)]
@@ -291,16 +291,7 @@ impl AiAgentService {
             completed_tasks: metrics_snapshot.completed_tasks,
             failed_tasks: metrics_snapshot.failed_tasks,
             available_tools: self.available_tools.clone(),
-            system_metrics: metrics_snapshot.system_metrics.unwrap_or_else(|| SystemMetrics {
-                cpu_usage_percent: 0.0,
-                memory_usage_mb: 0.0,
-                disk_usage_mb: 0.0,
-                network_io: NetworkMetrics {
-                    bytes_received: 0,
-                    bytes_sent: 0,
-                    active_connections: 0,
-                },
-            }),
+            system_metrics: metrics_snapshot.system_metrics,
             last_updated: Utc::now(),
         })
     }

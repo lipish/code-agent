@@ -6,25 +6,29 @@
 //! ## Features
 //!
 //! - **AI-Native Design**: Built from the ground up for AI autonomy
-//! - **Service Architecture**: Can run as both CLI tool and HTTP service
 //! - **Multiple AI Models**: Support for OpenAI, Anthropic, Zhipu, and local models
 //! - **Tool System**: Extensible tool system for file operations, command execution, etc.
-//! - **REST API**: Standard HTTP interface for integration with other applications
-//! - **Rust API**: Direct Rust API for in-process usage
-//! - **Real-time Updates**: WebSocket support for task progress monitoring
-//! - **Metrics & Monitoring**: Comprehensive metrics and health checking
+//! - **Service Architecture**: Optional HTTP service with REST API (requires "service" feature)
+//! - **Metrics & Monitoring**: Comprehensive metrics and health checking (requires "service" feature)
 
 pub mod agent;
 pub mod config;
 pub mod models;
 pub mod tools;
-pub mod cli;
 pub mod types;
 pub mod errors;
 pub mod understanding;
 pub mod execution;
+
+// Service modules (optional, enabled with "service" feature)
+#[cfg(feature = "service")]
 pub mod service_types;
+
+#[cfg(feature = "service")]
 pub mod service;
+
+// CLI module (always available but optional for library usage)
+pub mod cli;
 
 // Re-export main types and functions for convenience
 pub use agent::CodeAgent;
@@ -34,12 +38,15 @@ pub use tools::Tool;
 pub use types::*;
 pub use errors::AgentError;
 
-// Service exports
+// Service exports (only available with "service" feature)
+#[cfg(feature = "service")]
 pub use service_types::{
     TaskRequest, TaskResponse, BatchTaskRequest, BatchTaskResponse,
     TaskContext, TaskPriority, TaskStatus, TaskResult,
     ServiceConfig, ServiceStatus, ServiceError,
 };
+
+#[cfg(feature = "service")]
 pub use service::{
     AiAgentService, AiAgentApi, AiAgentClient, ApiClientBuilder, ServiceResult,
     MetricsSnapshot,

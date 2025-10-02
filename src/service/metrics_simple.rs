@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::RwLock;
+use chrono::Utc;
 use crate::service_types::{SystemMetrics, NetworkMetrics, ServiceHealth};
 
 /// Metrics collector for the AI Agent service
@@ -61,6 +62,20 @@ impl MetricsCollector {
     /// Get service uptime in seconds
     pub fn uptime_seconds(&self) -> u64 {
         self.start_time.elapsed().as_secs()
+    }
+
+    /// Get health status
+    pub async fn get_health_status(&self) -> ServiceHealth {
+        let metrics = self.metrics.read().await;
+        ServiceHealth {
+            status: if metrics.active_tasks < 10 && metrics.failed_tasks < metrics.total_tasks / 2 {
+                "healthy".to_string()
+            } else {
+                "unhealthy".to_string()
+            },
+            uptime: self.uptime_seconds(),
+            last_check: Utc::now(),
+        }
     }
 
     /// Record a task start

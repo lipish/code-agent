@@ -98,17 +98,22 @@ pub enum TaskStatus {
 }
 
 /// Task result from service
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TaskResult {
     /// Success status
+    #[serde(default)]
     pub success: bool,
     /// Result summary
+    #[serde(default)]
     pub summary: String,
     /// Detailed result
+    #[serde(default)]
     pub details: Option<String>,
     /// Generated files or artifacts
+    #[serde(default)]
     pub artifacts: Vec<TaskArtifact>,
     /// Execution time in seconds
+    #[serde(default)]
     pub execution_time: u64,
 }
 

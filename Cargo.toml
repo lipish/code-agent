@@ -3,17 +3,11 @@ name = "ai-agent"
 version = "0.2.0"
 edition = "2021"
 authors = ["AI Agent Team"]
-description = "AI-Native Code Assistant Service"
+description = "AI-Native Code Assistant Library"
 license = "MIT"
 repository = "https://github.com/lipish/code-agent"
-
-[[bin]]
-name = "ai-agent"
-path = "src/main.rs"
-
-[[bin]]
-name = "ai-agent-server"
-path = "src/server/main.rs"
+keywords = ["ai", "code-assistant", "automation", "llm"]
+categories = ["development-tools", "text-processing"]
 
 [lib]
 name = "ai_agent"
@@ -25,12 +19,13 @@ tokio = { version = "1.0", features = ["full"] }
 async-trait = "0.1"
 futures = "0.3"
 
-# HTTP server and client
+# HTTP client
 reqwest = { version = "0.11", features = ["json"] }
-warp = "0.3"
-axum = "0.7"
-tower = "0.4"
-tower-http = { version = "0.5", features = ["cors", "trace"] }
+
+# HTTP server (optional, for service feature)
+axum = { version = "0.7", optional = true }
+tower = { version = "0.4", optional = true }
+tower-http = { version = "0.5", features = ["cors", "trace"], optional = true }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -60,13 +55,15 @@ tokio-fs = "0.1"
 # Mocking for tests
 mockall = "0.12"
 
-# Metrics and monitoring
-metrics = "0.23"
-metrics-exporter-prometheus = "0.13"
+# Metrics and monitoring (optional, for service feature)
+metrics = { version = "0.23", optional = true }
+metrics-exporter-prometheus = { version = "0.13", optional = true }
 
 [features]
-default = []
-server = []
+default = ["core"]
+core = []
+service = ["axum", "tower", "tower-http", "metrics", "metrics-exporter-prometheus"]
+full = ["core", "service"]
 
 [dev-dependencies]
 tokio-test = "0.4"

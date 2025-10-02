@@ -46,6 +46,9 @@ pub enum ServiceErrorType {
 
     #[error("Authorization error: {0}")]
     AuthorizationError(String),
+
+    #[error("Internal error: {0}")]
+    InternalError(String),
 }
 
 impl ServiceErrorType {

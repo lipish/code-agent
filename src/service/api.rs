@@ -9,9 +9,9 @@ use futures::stream::{Stream};
 
 use crate::service_types::{
     TaskRequest, TaskResponse, BatchTaskRequest, BatchTaskResponse,
-    ServiceStatus, WebSocketMessage
+    ServiceStatus, WebSocketMessage, TaskContext, BatchExecutionMode
 };
-use crate::service::{ServiceResult, MetricsCollector};
+use crate::service::{ServiceResult, MetricsCollector, AiAgentService, MetricsSnapshot};
 use crate::service::error::{ServiceError, ErrorBuilder};
 
 /// Main API trait for AI Agent Service
@@ -324,7 +324,7 @@ pub mod examples {
     /// Example of using the HTTP API
     pub async fn http_example() -> ServiceResult<()> {
         let client = AiAgentClient::new(
-            ApiClientBuilder::http_with_auth("http://localhost:8080", "your-api-key")
+            Box::new(ApiClientBuilder::http_with_auth("http://localhost:8080", "your-api-key"))
         );
 
         // Get service status
