@@ -1,11 +1,12 @@
 //! Rust client example for AI Agent Service
 
-use ai_agent::service::{AiAgentClient, ApiClientBuilder, TaskRequest, TaskContext, TaskPriority};
+use code_agent::service::{CodeAgentClient, ApiClientBuilder};
+use code_agent::{TaskRequest, TaskPriority};
 use std::collections::HashMap;
 use tokio;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), code_agent::ServiceError> {
     // Initialize logging
     tracing_subscriber::fmt::init();
 
@@ -15,12 +16,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create client from environment configuration
     let client = match ApiClientBuilder::from_env() {
         Ok(client) => {
-            println!("✅ Connected to AI Agent Service");
-            AiAgentClient::new(client)
+            println!("✅ Connected to Code Agent Service");
+            CodeAgentClient::new(client)
         }
         Err(e) => {
             println!("❌ Failed to connect to service: {}", e);
-            println!("Make sure the service is running and AI_AGENT_API_URL is set");
+            println!("Make sure the service is running and CODE_AGENT_API_URL is set");
             return Err(e);
         }
     };
@@ -140,7 +141,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n📦 Example 6: Batch processing");
     println!("----------------------------");
 
-    use ai_agent::service::{BatchTaskRequest, BatchExecutionMode};
+    use code_agent::{BatchTaskRequest, BatchExecutionMode};
 
     let batch_request = BatchTaskRequest {
         tasks: vec![

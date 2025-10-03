@@ -43,11 +43,11 @@ pub use errors::AgentError;
 pub use service_types::{
     TaskRequest, TaskResponse, BatchTaskRequest, BatchTaskResponse,
     TaskContext, TaskPriority, TaskStatus, TaskResult,
-    ServiceConfig, ServiceStatus, ServiceError,
+    ServiceConfig, ServiceStatus, ServiceError, BatchExecutionMode,
 };
 
 #[cfg(feature = "service")]
 pub use service::{
-    AiAgentService, AiAgentApi, AiAgentClient, ApiClientBuilder, ServiceResult,
+    CodeAgentService, CodeAgentApi, CodeAgentClient, ApiClientBuilder, ServiceResult,
     MetricsSnapshot,
 };

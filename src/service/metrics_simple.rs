@@ -5,8 +5,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::RwLock;
-use chrono::Utc;
-use crate::service_types::{SystemMetrics, NetworkMetrics, ServiceHealth};
+use crate::service_types::{SystemMetrics, ServiceHealth};
 
 /// Metrics collector for the AI Agent service
 #[derive(Debug)]
@@ -67,14 +66,12 @@ impl MetricsCollector {
     /// Get health status
     pub async fn get_health_status(&self) -> ServiceHealth {
         let metrics = self.metrics.read().await;
-        ServiceHealth {
-            status: if metrics.active_tasks < 10 && metrics.failed_tasks < metrics.total_tasks / 2 {
-                "healthy".to_string()
-            } else {
-                "unhealthy".to_string()
-            },
-            uptime: self.uptime_seconds(),
-            last_check: Utc::now(),
+        if metrics.active_tasks < 10 && metrics.failed_tasks < metrics.total_tasks / 2 {
+            ServiceHealth::Healthy
+        } else if metrics.active_tasks < 20 {
+            ServiceHealth::Degraded
+        } else {
+            ServiceHealth::Unhealthy
         }
     }
 

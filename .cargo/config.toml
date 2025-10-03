@@ -1,0 +1,11 @@
+# Cargo configuration for the workspace
+# This enables the "service" feature by default for rust-analyzer and cargo check
+
+[build]
+# Default features for rust-analyzer and local development
+# This ensures that rust-analyzer can see the service module
+target-dir = "target"
+
+# Note: To enable features by default in rust-analyzer,
+# use the rust-analyzer.toml file in the project root
+

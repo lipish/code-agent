@@ -4,19 +4,19 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use reqwest::Client;
 use serde_json;
-use tokio::sync::RwLock;
 use futures::stream::{Stream};
 
 use crate::service_types::{
     TaskRequest, TaskResponse, BatchTaskRequest, BatchTaskResponse,
     ServiceStatus, WebSocketMessage, TaskContext, BatchExecutionMode
 };
-use crate::service::{ServiceResult, MetricsCollector, AiAgentService, MetricsSnapshot};
-use crate::service::error::{ServiceError, ErrorBuilder};
+use crate::service::{ServiceResult, CodeAgentService, MetricsSnapshot};
+use crate::ServiceError;
+use crate::service::error::{ErrorBuilder};
 
-/// Main API trait for AI Agent Service
+/// Main API trait for Code Agent Service
 #[async_trait::async_trait]
-pub trait AiAgentApi: Send + Sync {
+pub trait CodeAgentApi: Send + Sync {
     /// Execute a single task
     async fn execute_task(&self, request: TaskRequest) -> ServiceResult<TaskResponse>;
 
@@ -41,18 +41,18 @@ pub trait AiAgentApi: Send + Sync {
 
 /// In-process API implementation
 pub struct InProcessApi {
-    service: Arc<AiAgentService>,
+    service: Arc<CodeAgentService>,
 }
 
 impl InProcessApi {
     /// Create a new in-process API
-    pub fn new(service: Arc<AiAgentService>) -> Self {
+    pub fn new(service: Arc<CodeAgentService>) -> Self {
         Self { service }
     }
 }
 
 #[async_trait::async_trait]
-impl AiAgentApi for InProcessApi {
+impl CodeAgentApi for InProcessApi {
     async fn execute_task(&self, request: TaskRequest) -> ServiceResult<TaskResponse> {
         self.service.execute_task(request).await
     }
@@ -149,7 +149,7 @@ impl HttpClientApi {
 }
 
 #[async_trait::async_trait]
-impl AiAgentApi for HttpClientApi {
+impl CodeAgentApi for HttpClientApi {
     async fn execute_task(&self, request: TaskRequest) -> ServiceResult<TaskResponse> {
         let request_builder = self.build_request(reqwest::Method::POST, "/tasks").await?;
         let response = request_builder.json(&request).send().await
@@ -214,7 +214,7 @@ pub struct ApiClientBuilder;
 
 impl ApiClientBuilder {
     /// Create an in-process API client
-    pub fn in_process(service: Arc<AiAgentService>) -> Box<dyn AiAgentApi> {
+    pub fn in_process(service: Arc<CodeAgentService>) -> Box<dyn CodeAgentApi> {
         Box::new(InProcessApi::new(service))
     }
 
@@ -229,11 +229,11 @@ impl ApiClientBuilder {
     }
 
     /// Create a client from environment configuration
-    pub fn from_env() -> ServiceResult<Box<dyn AiAgentApi>> {
-        let base_url = std::env::var("AI_AGENT_API_URL")
+    pub fn from_env() -> ServiceResult<Box<dyn CodeAgentApi>> {
+        let base_url = std::env::var("CODE_AGENT_API_URL")
             .unwrap_or_else(|_| "http://localhost:8080".to_string());
 
-        let api_key = std::env::var("AI_AGENT_API_KEY").ok();
+        let api_key = std::env::var("CODE_AGENT_API_KEY").ok();
 
         if let Some(key) = api_key {
             Ok(Box::new(Self::http_with_auth(base_url, key)))
@@ -244,13 +244,13 @@ impl ApiClientBuilder {
 }
 
 /// Simple client wrapper for convenient usage
-pub struct AiAgentClient {
-    api: Box<dyn AiAgentApi>,
+pub struct CodeAgentClient {
+    api: Box<dyn CodeAgentApi>,
 }
 
-impl AiAgentClient {
+impl CodeAgentClient {
     /// Create a new client
-    pub fn new(api: Box<dyn AiAgentApi>) -> Self {
+    pub fn new(api: Box<dyn CodeAgentApi>) -> Self {
         Self { api }
     }
 
@@ -291,13 +291,13 @@ impl AiAgentClient {
     }
 
     /// Get a reference to the underlying API
-    pub fn api(&self) -> &dyn AiAgentApi {
+    pub fn api(&self) -> &dyn CodeAgentApi {
         self.api.as_ref()
     }
 }
 
-impl std::ops::Deref for AiAgentClient {
-    type Target = dyn AiAgentApi;
+impl std::ops::Deref for CodeAgentClient {
+    type Target = dyn CodeAgentApi;
 
     fn deref(&self) -> &Self::Target {
         self.api.as_ref()
@@ -312,7 +312,7 @@ pub mod examples {
     pub async fn in_process_example() -> ServiceResult<()> {
         // This would typically be created from the service
         // let service = Arc::new(AiAgentService::new(service_config, agent_config).await?);
-        // let client = AiAgentClient::new(ApiClientBuilder::in_process(service));
+        // let client = CodeAgentClient::new(ApiClientBuilder::in_process(service));
 
         // Execute a simple task
         // let response = client.execute_simple_task("Read the README.md file and summarize it").await?;
@@ -323,7 +323,7 @@ pub mod examples {
 
     /// Example of using the HTTP API
     pub async fn http_example() -> ServiceResult<()> {
-        let client = AiAgentClient::new(
+        let client = CodeAgentClient::new(
             Box::new(ApiClientBuilder::http_with_auth("http://localhost:8080", "your-api-key"))
         );
 
@@ -340,7 +340,7 @@ pub mod examples {
 
     /// Example of batch processing
     pub async fn batch_example() -> ServiceResult<()> {
-        let client = AiAgentClient::new(ApiClientBuilder::from_env()?);
+        let client = CodeAgentClient::new(ApiClientBuilder::from_env()?);
 
         let batch_request = BatchTaskRequest {
             tasks: vec![

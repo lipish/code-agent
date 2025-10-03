@@ -7,19 +7,19 @@ use tokio::sync::{RwLock, Semaphore};
 use tokio::time::timeout;
 use chrono::Utc;
 use uuid::Uuid;
-use tracing::{info, warn, error, debug};
+use tracing::info;
 
 use crate::agent::CodeAgent;
 use crate::config::AgentConfig;
-use crate::errors::AgentError;
 use crate::models::{LanguageModel, ZhipuModel};
-use crate::service::{ServiceConfig, TaskRequest, TaskResponse, TaskStatus, ExecutionStep};
+use crate::{ServiceConfig, TaskRequest, TaskResponse, TaskStatus, ServiceStatus, MetricsSnapshot, TaskResult};
+use crate::service_types::{TaskPlan, TaskMetrics, BatchTaskRequest, BatchTaskResponse, BatchExecutionMode, BatchStatistics, StepType, StepStatus, ExecutionStep};
 use crate::service::error::{ServiceResult, ServiceErrorType, ErrorBuilder};
 use crate::service::metrics_simple::MetricsCollector;
 
-/// AI Agent Service
+/// Code Agent Service
 #[derive(Debug)]
-pub struct AiAgentService {
+pub struct CodeAgentService {
     /// Service configuration
     config: ServiceConfig,
     /// Metrics collector
@@ -36,6 +36,7 @@ pub struct AiAgentService {
 
 /// Task execution context
 #[derive(Debug)]
+#[allow(dead_code)]
 struct TaskContext {
     /// Task ID
     task_id: String,
@@ -55,7 +56,7 @@ struct TaskContext {
     current_step: u32,
 }
 
-impl AiAgentService {
+impl CodeAgentService {
     /// Create a new service instance
     pub async fn new(config: ServiceConfig, agent_config: AgentConfig) -> ServiceResult<Self> {
         info!("Creating AI Agent Service with config: {:?}", config);
@@ -86,7 +87,7 @@ impl AiAgentService {
         info!("Executing task: {}", task_id);
 
         // Check rate limiting
-        if let Some(rate_limit) = &self.config.rate_limiting {
+        if let Some(_rate_limit) = &self.config.rate_limiting {
             // TODO: Implement rate limiting logic
         }
 
@@ -201,7 +202,7 @@ impl AiAgentService {
             }
         }
 
-        let total_time = start_time.elapsed().as_secs();
+        let _total_time = start_time.elapsed().as_secs();
         let mut completed_tasks = 0;
         let mut failed_tasks = 0;
         let mut total_execution_time = 0u64;
@@ -265,7 +266,7 @@ impl AiAgentService {
 
     /// Cancel a running task
     pub async fn cancel_task(&self, task_id: &str) -> ServiceResult<()> {
-        let mut active_tasks = self.active_tasks.write().await;
+        let active_tasks = self.active_tasks.write().await;
 
         if let Some(task_context) = active_tasks.get(task_id) {
             let mut context = task_context.write().await;
@@ -287,7 +288,7 @@ impl AiAgentService {
             version: env!("CARGO_PKG_VERSION").to_string(),
             status: health,
             uptime_seconds: metrics_snapshot.uptime_seconds,
-            active_tasks: metrics_snapshot.active_tasks,
+            active_tasks: metrics_snapshot.active_tasks as u32,
             completed_tasks: metrics_snapshot.completed_tasks,
             failed_tasks: metrics_snapshot.failed_tasks,
             available_tools: self.available_tools.clone(),
@@ -427,8 +428,8 @@ impl AiAgentService {
                 } else {
                     TaskStatus::Failed
                 };
-                context.steps = steps;
-                context.plan = agent_result.task_plan;
+                context.steps = steps.clone();
+                context.plan = agent_result.task_plan.as_ref().map(|p| convert_task_plan(p.clone()));
                 context.metrics.total_execution_time = agent_result.execution_time.unwrap_or(0);
                 context.metrics.planning_time_ms = planning_start.elapsed().as_millis() as u64;
                 context.metrics.execution_time_ms = execution_start.elapsed().as_millis() as u64;
@@ -446,8 +447,8 @@ impl AiAgentService {
                     artifacts: Vec::new(), // TODO: Extract artifacts from result
                     execution_time: agent_result.execution_time.unwrap_or(0),
                 }),
-                plan: agent_result.task_plan,
-                steps: context.steps.clone(),
+                plan: agent_result.task_plan.map(convert_task_plan),
+                steps: steps,
                 metrics: context.metrics.clone(),
                 error: None,
                 created_at: Utc::now(),
@@ -473,7 +474,7 @@ impl AiAgentService {
 }
 
 /// Create model from configuration
-fn create_model_from_config(config: &AgentConfig) -> Result<Box<dyn LanguageModel>, ServiceError> {
+fn create_model_from_config(config: &AgentConfig) -> Result<Box<dyn LanguageModel>, ServiceErrorType> {
     match &config.model.provider {
         crate::config::ModelProvider::Zhipu => {
             let api_key = config.model.api_key.clone()
@@ -485,7 +486,7 @@ fn create_model_from_config(config: &AgentConfig) -> Result<Box<dyn LanguageMode
             )))
         }
         // TODO: Implement other model providers
-        _ => Err(ServiceErrorType::ConfigurationError("Unsupported model provider".to_string()).to_service_error()),
+        _ => Err(ServiceErrorType::ConfigurationError("Unsupported model provider".to_string())),
     }
 }
 
@@ -509,4 +510,20 @@ fn get_available_tools() -> Vec<String> {
         "run_command".to_string(),
         "list_files".to_string(),
     ]
+}
+
+/// Convert types::TaskPlan to service_types::TaskPlan
+fn convert_task_plan(plan: crate::types::TaskPlan) -> TaskPlan {
+    TaskPlan {
+        understanding: plan.understanding,
+        approach: plan.approach,
+        complexity: match plan.complexity {
+            crate::types::TaskComplexity::Simple => crate::service_types::TaskComplexity::Simple,
+            crate::types::TaskComplexity::Moderate => crate::service_types::TaskComplexity::Moderate,
+            crate::types::TaskComplexity::Complex => crate::service_types::TaskComplexity::Complex,
+        },
+        estimated_steps: plan.estimated_steps.unwrap_or(1),
+        requirements: plan.requirements,
+        created_at: Utc::now(),
+    }
 }

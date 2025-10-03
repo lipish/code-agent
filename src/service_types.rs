@@ -3,7 +3,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};
-use uuid::Uuid;
 
 /// Request to execute a task
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -88,6 +87,7 @@ pub struct TaskResponse {
 /// Task status in service context
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(PartialEq, Eq)]
 pub enum TaskStatus {
     Queued,
     Running,
@@ -252,6 +252,18 @@ pub struct ServiceError {
     /// Timestamp
     pub timestamp: DateTime<Utc>,
 }
+
+impl std::fmt::Display for ServiceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}] {}", self.code, self.message)?;
+        if let Some(details) = &self.details {
+            write!(f, ": {}", details)?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for ServiceError {}
 
 /// Service status and health information
 #[derive(Debug, Clone, Serialize, Deserialize)]

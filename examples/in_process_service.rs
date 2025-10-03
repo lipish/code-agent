@@ -1,8 +1,9 @@
 //! In-process service example
 
-use ai_agent::{
-    service::{AiAgentService, ServiceConfig, AiAgentClient, ApiClientBuilder},
+use code_agent::{
+    service::{CodeAgentService, CodeAgentClient, ApiClientBuilder},
     config::AgentConfig,
+    ServiceConfig,
 };
 use std::sync::Arc;
 use tokio;
@@ -20,12 +21,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let agent_config = AgentConfig::load_with_fallback("config.toml")?;
 
     // Create service instance
-    println!("🔧 Creating AI Agent Service...");
-    let service = Arc::new(AiAgentService::new(service_config, agent_config).await?);
+    println!("🔧 Creating Code Agent Service...");
+    let service = Arc::new(CodeAgentService::new(service_config, agent_config).await?);
     println!("✅ Service created successfully");
 
     // Create in-process client
-    let client = AiAgentClient::new(ApiClientBuilder::in_process(service.clone()));
+    let client = CodeAgentClient::new(ApiClientBuilder::in_process(service.clone()));
 
     // Example 1: Basic usage
     println!("\n📝 Example 1: Basic task execution");

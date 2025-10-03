@@ -18,7 +18,7 @@ Demonstrates how to use the AI Agent Service from Rust code:
 **Run with:**
 ```bash
 cd examples
-cargo run --example rust_client
+cargo run --example rust_client --features service --features service
 ```
 
 #### `in_process_service.rs`
@@ -31,7 +31,7 @@ Shows how to run the AI Agent Service in-process (without HTTP):
 **Run with:**
 ```bash
 cd examples
-cargo run --example in_process_service
+cargo run --example in_process_service --features service
 ```
 
 #### `http_client.rs`
@@ -46,10 +46,10 @@ Demonstrates HTTP client usage:
 ```bash
 cd examples
 # Start the service first
-cargo run --bin ai-agent-server
+cargo run --bin code-agent-server --features service
 
 # In another terminal, run the client
-cargo run --example http_client
+cargo run --example http_client --features service
 ```
 
 ### 2. **Docker Deployment**
@@ -118,7 +118,7 @@ export AI_AGENT_API_URL=http://localhost:8080
 export AI_AGENT_API_KEY=your-api-key
 
 # The client will automatically use these
-cargo run --example rust_client
+cargo run --example rust_client --features service
 ```
 
 ## 🔧 Configuration Examples

@@ -1,0 +1,29 @@
+{
+  "tabs": [
+    {
+      "title": "Code Agent",
+      "path": "/Users/mac-m4/github/code-agent"
+    }
+  ],
+  "workspace": {
+    "languages": {
+      "Rust": {
+        "language_servers": ["rust-analyzer"],
+        "tab_size": 4
+      }
+    },
+    "lsp": {
+      "rust-analyzer": {
+        "initialization_options": {
+          "cargo": {
+            "features": ["service"],
+            "loadOutDirsFromCheck": true
+          },
+          "procMacro": {
+            "enable": true
+          }
+        }
+      }
+    }
+  }
+}

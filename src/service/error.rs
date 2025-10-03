@@ -1,9 +1,8 @@
 //! Service-specific error types
 
 use thiserror::Error;
-use crate::service_types::{ServiceError, TaskStatus};
+use crate::service_types::ServiceError;
 use chrono::Utc;
-use uuid::Uuid;
 
 /// Service result type
 pub type ServiceResult<T> = Result<T, ServiceError>;
@@ -78,11 +77,18 @@ impl ServiceErrorType {
             ServiceErrorType::InternalServerError(_) => "INTERNAL_SERVER_ERROR".to_string(),
             ServiceErrorType::AuthenticationError(_) => "AUTHENTICATION_ERROR".to_string(),
             ServiceErrorType::AuthorizationError(_) => "AUTHORIZATION_ERROR".to_string(),
+            ServiceErrorType::InternalError(_) => "INTERNAL_ERROR".to_string(),
         }
     }
 }
 
 /// From implementations for converting from other error types
+impl From<ServiceErrorType> for ServiceError {
+    fn from(error_type: ServiceErrorType) -> Self {
+        error_type.to_service_error()
+    }
+}
+
 impl From<crate::errors::AgentError> for ServiceErrorType {
     fn from(error: crate::errors::AgentError) -> Self {
         match error {

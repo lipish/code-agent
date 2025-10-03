@@ -1,11 +1,11 @@
 //! HTTP client example for AI Agent Service
 
-use ai_agent::service::{AiAgentClient, ApiClientBuilder, TaskRequest, BatchTaskRequest, BatchExecutionMode};
-use std::collections::HashMap;
+use code_agent::service::{CodeAgentClient, ApiClientBuilder};
+use code_agent::{TaskRequest, BatchTaskRequest, BatchExecutionMode, TaskStatus};
 use tokio;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), code_agent::ServiceError> {
     // Initialize logging
     tracing_subscriber::fmt::init();
 
@@ -24,9 +24,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create HTTP client
     let client = if let Some(key) = api_key {
-        AiAgentClient::new(ApiClientBuilder::http_with_auth(base_url, key))
+        CodeAgentClient::new(Box::new(ApiClientBuilder::http_with_auth(base_url.clone(), key)))
     } else {
-        AiAgentClient::new(ApiClientBuilder::http(base_url))
+        CodeAgentClient::new(Box::new(ApiClientBuilder::http(base_url.clone())))
     };
 
     // Test service connection
@@ -58,16 +58,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("📝 Task: {}", task);
         match client.execute_simple_task(task).await {
             Ok(response) => {
-                println!("✅ Success: {}", response.result.unwrap_or_default().summary);
-                if let Some(details) = response.result.unwrap_or_default().details {
-                    println!("📄 Details: {}", details);
+                if let Some(result) = &response.result {
+                    println!("✅ Success: {}", result.summary);
+                    if let Some(details) = &result.details {
+                        println!("📄 Details: {}", details);
+                    }
                 }
             }
             Err(e) => {
                 println!("❌ Failed: {}", e);
             }
-        println!();
         }
+        println!();
     }
 
     // Example 2: Code generation and analysis
@@ -223,7 +225,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         match client.get_task_status(&task_id).await {
             Ok(status) => {
                 println!("📊 Check {} - Status: {:?}", i, status.status);
-                if matches!(status.status, ai_agent::service::TaskStatus::Completed | ai_agent::service::TaskStatus::Failed) {
+                if matches!(status.status, TaskStatus::Completed | TaskStatus::Failed) {
                     println!("🏁 Task completed with status: {:?}", status.status);
                     break;
                 }

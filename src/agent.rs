@@ -16,6 +16,16 @@ pub struct CodeAgent {
     _error_handler: crate::errors::ErrorHandler,
 }
 
+impl std::fmt::Debug for CodeAgent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CodeAgent")
+            .field("config", &self.config)
+            .field("tools", &"<ToolRegistry>")
+            .field("model", &"<LanguageModel>")
+            .finish()
+    }
+}
+
 impl CodeAgent {
     /// Create a new agent with the given model and configuration
     pub fn new(model: Box<dyn LanguageModel>, config: AgentConfig) -> Self {

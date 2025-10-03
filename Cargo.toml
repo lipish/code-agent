@@ -10,7 +10,7 @@ keywords = ["ai", "code-assistant", "automation", "llm", "ai-native"]
 categories = ["development-tools", "text-processing"]
 
 [lib]
-name = "ai_agent"
+name = "code_agent"
 path = "src/lib.rs"
 
 [dependencies]

@@ -58,8 +58,8 @@ impl MetricsCollector {
         metrics.total_tasks += 1;
         metrics.active_tasks += 1;
         // TODO: Fix metrics macros
-        // counter!("ai_agent_tasks_total").increment(1);
-        // gauge!("ai_agent_active_tasks").set(metrics.active_tasks as f64);
+        // counter!("code_agent_tasks_total").increment(1);
+        // gauge!("code_agent_active_tasks").set(metrics.active_tasks as f64);
     }
 
     /// Record a task completion
@@ -72,10 +72,10 @@ impl MetricsCollector {
 
         if success {
             metrics.completed_tasks += 1;
-            counter!("ai_agent_tasks_completed_total").increment(1);
+            counter!("code_agent_tasks_completed_total").increment(1);
         } else {
             metrics.failed_tasks += 1;
-            counter!("ai_agent_tasks_failed_total").increment(1);
+            counter!("code_agent_tasks_failed_total").increment(1);
         }
 
         metrics.task_execution_times.push(execution_time_seconds);
@@ -85,22 +85,22 @@ impl MetricsCollector {
             metrics.task_execution_times.remove(0);
         }
 
-        histogram!("ai_agent_task_duration_seconds").record(execution_time_seconds);
-        gauge!("ai_agent_active_tasks").set(metrics.active_tasks as f64);
+        histogram!("code_agent_task_duration_seconds").record(execution_time_seconds);
+        gauge!("code_agent_active_tasks").set(metrics.active_tasks as f64);
     }
 
     /// Record tool usage
     pub async fn record_tool_usage(&self, tool_name: &str) {
         let mut metrics = self.metrics.write().await;
         *metrics.tool_usage.entry(tool_name.to_string()).or_insert(0) += 1;
-        counter!("ai_agent_tool_usage_total", "tool" => tool_name).increment(1);
+        counter!("code_agent_tool_usage_total", "tool" => tool_name).increment(1);
     }
 
     /// Record an error
     pub async fn record_error(&self, error_type: &str) {
         let mut metrics = self.metrics.write().await;
         *metrics.error_counts.entry(error_type.to_string()).or_insert(0) += 1;
-        counter!("ai_agent_errors_total", "error_type" => error_type).increment(1);
+        counter!("code_agent_errors_total", "error_type" => error_type).increment(1);
     }
 
     /// Update system metrics
@@ -108,12 +108,12 @@ impl MetricsCollector {
         let mut metrics = self.metrics.write().await;
         metrics.system_metrics = Some(system_metrics.clone());
 
-        gauge!("ai_agent_cpu_usage_percent").set(system_metrics.cpu_usage_percent);
-        gauge!("ai_agent_memory_usage_mb").set(system_metrics.memory_usage_mb);
-        gauge!("ai_agent_disk_usage_mb").set(system_metrics.disk_usage_mb);
-        gauge!("ai_agent_network_bytes_received").set(system_metrics.network_io.bytes_received as f64);
-        gauge!("ai_agent_network_bytes_sent").set(system_metrics.network_io.bytes_sent as f64);
-        gauge!("ai_agent_network_active_connections").set(system_metrics.network_io.active_connections as f64);
+        gauge!("code_agent_cpu_usage_percent").set(system_metrics.cpu_usage_percent);
+        gauge!("code_agent_memory_usage_mb").set(system_metrics.memory_usage_mb);
+        gauge!("code_agent_disk_usage_mb").set(system_metrics.disk_usage_mb);
+        gauge!("code_agent_network_bytes_received").set(system_metrics.network_io.bytes_received as f64);
+        gauge!("code_agent_network_bytes_sent").set(system_metrics.network_io.bytes_sent as f64);
+        gauge!("code_agent_network_active_connections").set(system_metrics.network_io.active_connections as f64);
     }
 
     /// Get current metrics snapshot

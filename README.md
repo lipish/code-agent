@@ -1,10 +1,9 @@
-# AI-Native Code Agent Service
+# Code Agent Service
 
 一个极简、AI原生化的代码助手服务，提供Rust API和HTTP REST接口，可集成到任何应用中。
 
 [![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](Dockerfile)
 
 ## 🎯 项目特点
 
@@ -14,7 +13,6 @@
 - **⚡ 高性能**: 支持并发任务执行和实时监控
 - **🛠️ 工具集成**: 安全的文件操作、命令执行等工具系统
 - **📊 监控完备**: 内置指标收集和健康检查
-- **🐳 容器化**: 支持Docker部署和Kubernetes集群
 - **🔒 企业级**: 支持认证、限流、CORS等企业特性
 
 ## 🚀 快速开始
@@ -43,32 +41,22 @@ cargo run -- task "分析这个项目并创建摘要"
 
 ```bash
 # 启动HTTP服务
-cargo run --bin ai-agent-server
+cargo run --bin code-agent-server
 
 # 在另一个终端测试
 curl -X POST http://localhost:8080/api/v1/tasks \
   -H "Content-Type: application/json" \
-  -d '{"task": "Hello, AI Agent!"}'
+  -d '{"task": "Hello, Code Agent!"}'
 ```
 
-### 方式三：Docker部署
-
-```bash
-# 使用Docker Compose启动完整服务栈
-cd examples
-docker-compose up -d
-
-# 访问服务
-curl http://localhost:8080/health
-```
 
 ## 📋 使用方式
 
 ### 1. Rust API 集成
 
 ```rust
-use ai_agent::{
-    service::{AiAgentService, ServiceConfig, AiAgentClient, ApiClientBuilder},
+use code_agent::{
+    service::{CodeAgentService, ServiceConfig, CodeAgentClient, ApiClientBuilder},
     config::AgentConfig
 };
 use std::sync::Arc;
@@ -76,13 +64,13 @@ use std::sync::Arc;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 创建服务实例
-    let service = Arc::new(AiAgentService::new(
+    let service = Arc::new(CodeAgentService::new(
         ServiceConfig::default(),
         AgentConfig::load_with_fallback("config.toml")?
     ).await?);
 
     // 创建客户端
-    let client = AiAgentClient::new(ApiClientBuilder::in_process(service));
+    let client = CodeAgentClient::new(ApiClientBuilder::in_process(service));
 
     // 执行任务
     let response = client.execute_simple_task("创建一个Hello World程序").await?;
@@ -186,21 +174,21 @@ burst_size = 10
 
 ```bash
 # 服务配置
-AI_AGENT_MAX_CONCURRENT_TASKS=10
-AI_AGENT_DEFAULT_TASK_TIMEOUT=300
-AI_AGENT_ENABLE_METRICS=true
-AI_AGENT_LOG_LEVEL=info
+CODE_AGENT_MAX_CONCURRENT_TASKS=10
+CODE_AGENT_DEFAULT_TASK_TIMEOUT=300
+CODE_AGENT_ENABLE_METRICS=true
+CODE_AGENT_LOG_LEVEL=info
 
 # 服务器配置
 BIND_ADDRESS=0.0.0.0:8080
 
 # AI模型配置
-AI_AGENT_MODEL_PROVIDER=zhipu
-AI_AGENT_MODEL_NAME=glm-4
-AI_AGENT_API_KEY=your-api-key
+CODE_AGENT_MODEL_PROVIDER=zhipu
+CODE_AGENT_MODEL_NAME=glm-4
+CODE_AGENT_API_KEY=your-api-key
 
 # CORS配置
-AI_AGENT_CORS_ALLOWED_ORIGINS=*
+CODE_AGENT_CORS_ALLOWED_ORIGINS=*
 ```
 
 ## 📊 API 文档
@@ -217,6 +205,10 @@ AI_AGENT_CORS_ALLOWED_ORIGINS=*
 | `/api/v1/tasks/batch` | POST | 批量执行 |
 | `/api/v1/tasks/{id}` | GET | 任务状态 |
 | `/api/v1/tasks/{id}` | DELETE | 取消任务 |
+| `/api/v1/config` | GET | 获取配置 |
+| `/api/v1/config` | PUT | 更新配置 |
+| `/api/v1/config/model` | PUT | 更新模型配置 |
+| `/api/v1/config/validate` | POST | 验证配置 |
 
 ### 任务请求格式
 
@@ -264,82 +256,46 @@ AI_AGENT_CORS_ALLOWED_ORIGINS=*
 }
 ```
 
-## 🐳 Docker 部署
+### 配置管理 API
 
-### 基础部署
-
+#### 获取当前配置
 ```bash
-# 构建镜像
-docker build -t ai-agent-service .
-
-# 运行容器
-docker run -p 8080:8080 \
-  -e AI_AGENT_API_KEY=your-api-key \
-  ai-agent-service
+curl http://localhost:8080/api/v1/config
 ```
 
-### Docker Compose
-
+#### 更新模型配置（支持动态配置）
 ```bash
-# 启动完整服务栈（包含监控）
-cd examples
-docker-compose up -d
-
-# 查看服务状态
-docker-compose ps
-
-# 查看日志
-docker-compose logs -f ai-agent-service
+curl -X PUT http://localhost:8080/api/v1/config/model \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "zhipu",
+    "model_name": "glm-4",
+    "api_key": "your-new-api-key",
+    "max_tokens": 4000,
+    "temperature": 0.7
+  }'
 ```
 
-### Kubernetes
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: ai-agent-service
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: ai-agent-service
-  template:
-    metadata:
-      labels:
-        app: ai-agent-service
-    spec:
-      containers:
-      - name: ai-agent
-        image: ai-agent-service:latest
-        ports:
-        - containerPort: 8080
-        env:
-        - name: AI_AGENT_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: ai-agent-secrets
-              key: api-key
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: ai-agent-service
-spec:
-  selector:
-    app: ai-agent-service
-  ports:
-  - port: 80
-    targetPort: 8080
-  type: ClusterIP
+#### 验证配置
+```bash
+curl -X POST http://localhost:8080/api/v1/config/validate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "config": {
+      "model": {
+        "provider": "zhipu",
+        "model_name": "glm-4",
+        "api_key": "test-key"
+      }
+    }
+  }'
 ```
+
+**配置管理特性:**
+- ✅ **动态配置**: 无需重启服务即可更新模型和 API key
+- ✅ **配置验证**: 提交前验证配置的正确性
+- ✅ **错误处理**: 详细的错误信息和警告提示
+- ✅ **安全性**: API key 等敏感信息的安全处理
 
 ## 📈 监控和指标
 
@@ -356,12 +312,6 @@ spec:
 - `ai_agent_cpu_usage_percent` - CPU使用率
 - `ai_agent_memory_usage_mb` - 内存使用量
 
-### Grafana 仪表板
-
-使用提供的Docker Compose配置可以启动完整的监控栈：
-
-- **Grafana**: http://localhost:3000 (admin/admin)
-- **Prometheus**: http://localhost:9090
 
 ## 🧪 测试
 
@@ -373,9 +323,9 @@ cargo test
 ### 集成测试
 ```bash
 cd examples
-cargo run --example rust_client
-cargo run --example http_client
-cargo run --example in_process_service
+cargo run --example rust_client --features service
+cargo run --example http_client --features service
+cargo run --example in_process_service --features service
 ```
 
 ### 负载测试
@@ -400,7 +350,7 @@ hey -n 1000 -c 50 \
           └──────────────────────┼──────────────────────┘
                                  │
                     ┌─────────────┴─────────────┐
-                    │    AI Agent Service     │
+                    │   Code Agent Service     │
                     │  (Core Business Logic)  │
                     └─────────────┬─────────────┘
                                  │
@@ -446,9 +396,9 @@ MIT License - 详见 [LICENSE](LICENSE) 文件
 ## 🔗 相关链接
 
 - [GitHub仓库](https://github.com/lipish/code-agent)
-- [Docker Hub](https://hub.docker.com/r/ai-agent/service)
+- [Docker Hub](https://hub.docker.com/r/code-agent/service)
 - [API文档](doc/SERVICE_API.md)
 
 ---
 
-**AI-Native Code Agent Service** - 让AI能力轻松集成到任何应用中。
+**Code Agent Service** - 让AI能力轻松集成到任何应用中。
