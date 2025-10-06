@@ -1,6 +1,6 @@
-# Code Agent Service
+# Task Runner
 
-一个极简、AI原生化的代码助手服务，提供Rust API和HTTP REST接口，可集成到任何应用中。
+一个简单高效的 AI 驱动任务运行服务，提供 Rust API 和 HTTP REST 接口，可集成到任何应用中。
 
 [![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -26,8 +26,8 @@
 
 ```bash
 # 克隆项目
-git clone https://github.com/lipish/code-agent.git
-cd code-agent
+git clone https://github.com/lipish/task-runner.git
+cd task-runner
 
 # 配置API密钥
 cp .env.example .env
@@ -41,12 +41,12 @@ cargo run -- task "分析这个项目并创建摘要"
 
 ```bash
 # 启动HTTP服务
-cargo run --bin code-agent-server
+cargo run --bin task-runner-server
 
 # 在另一个终端测试
 curl -X POST http://localhost:8080/api/v1/tasks \
   -H "Content-Type: application/json" \
-  -d '{"task": "Hello, Code Agent!"}'
+  -d '{"task": "Hello, Task Runner!"}'
 ```
 
 
@@ -55,8 +55,8 @@ curl -X POST http://localhost:8080/api/v1/tasks \
 ### 1. Rust API 集成
 
 ```rust
-use code_agent::{
-    service::{CodeAgentService, ServiceConfig, CodeAgentClient, ApiClientBuilder},
+use task_runner::{
+    service::{TaskRunnerService, ServiceConfig, TaskRunnerClient, ApiClientBuilder},
     config::AgentConfig
 };
 use std::sync::Arc;
@@ -64,13 +64,13 @@ use std::sync::Arc;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 创建服务实例
-    let service = Arc::new(CodeAgentService::new(
+    let service = Arc::new(TaskRunnerService::new(
         ServiceConfig::default(),
         AgentConfig::load_with_fallback("config.toml")?
     ).await?);
 
     // 创建客户端
-    let client = CodeAgentClient::new(ApiClientBuilder::in_process(service));
+    let client = TaskRunnerClient::new(ApiClientBuilder::in_process(service));
 
     // 执行任务
     let response = client.execute_simple_task("创建一个Hello World程序").await?;
@@ -174,21 +174,21 @@ burst_size = 10
 
 ```bash
 # 服务配置
-CODE_AGENT_MAX_CONCURRENT_TASKS=10
-CODE_AGENT_DEFAULT_TASK_TIMEOUT=300
-CODE_AGENT_ENABLE_METRICS=true
-CODE_AGENT_LOG_LEVEL=info
+TASK_RUNNER_MAX_CONCURRENT_TASKS=10
+TASK_RUNNER_DEFAULT_TASK_TIMEOUT=300
+TASK_RUNNER_ENABLE_METRICS=true
+TASK_RUNNER_LOG_LEVEL=info
 
 # 服务器配置
 BIND_ADDRESS=0.0.0.0:8080
 
 # AI模型配置
-CODE_AGENT_MODEL_PROVIDER=zhipu
-CODE_AGENT_MODEL_NAME=glm-4
-CODE_AGENT_API_KEY=your-api-key
+TASK_RUNNER_MODEL_PROVIDER=zhipu
+TASK_RUNNER_MODEL_NAME=glm-4
+TASK_RUNNER_API_KEY=your-api-key
 
 # CORS配置
-CODE_AGENT_CORS_ALLOWED_ORIGINS=*
+TASK_RUNNER_CORS_ALLOWED_ORIGINS=*
 ```
 
 ## 📊 API 文档
@@ -342,6 +342,8 @@ hey -n 1000 -c 50 \
 
 ## 🏗️ 架构
 
+### 系统架构图
+
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   Rust Client   │    │  HTTP Client    │    │  Other Clients  │
@@ -350,7 +352,7 @@ hey -n 1000 -c 50 \
           └──────────────────────┼──────────────────────┘
                                  │
                     ┌─────────────┴─────────────┐
-                    │   Code Agent Service     │
+                    │   Task Runner Service    │
                     │  (Core Business Logic)  │
                     └─────────────┬─────────────┘
                                  │
@@ -363,6 +365,58 @@ hey -n 1000 -c 50 \
     │ etc.)     │        │ etc.)       │        │            │
     └───────────┘        └─────────────┘        └────────────┘
 ```
+
+### 任务执行模式：单次计划生成
+
+Task Runner 采用**"一次性计划生成"**的执行模式，这是一种简单高效的任务处理方式。
+
+#### 执行流程
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     任务请求                                 │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│  阶段 1: 理解阶段 (understand_task)                          │
+│  ─────────────────────────────────────────────────────      │
+│  • AI 分析任务需求                                           │
+│  • 生成 TaskPlan:                                           │
+│    - understanding: 对任务的理解                             │
+│    - approach: 解决方法                                      │
+│    - complexity: 复杂度评估 (Simple/Moderate/Complex)       │
+│    - estimated_steps: 预估步骤数                            │
+│    - requirements: 依赖和要求                               │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│  阶段 2: 执行阶段 (execute_task_real)                        │
+│  ─────────────────────────────────────────────────────      │
+│  • 基于生成的计划执行任务                                    │
+│  • 模式匹配识别任务类型:                                     │
+│    - 文件读取 (read file)                                   │
+│    - 文件列表 (list files)                                  │
+│    - 命令执行 (run command)                                 │
+│  • 执行相应操作                                             │
+│  • 计划在执行过程中不会动态调整                              │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│  阶段 3: 结果生成                                            │
+│  ─────────────────────────────────────────────────────      │
+│  • 返回 ExecutionResult                                     │
+│  • 包含执行摘要、详情、耗时等信息                            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### 核心特点
+
+- **计划一次生成**: 在理解阶段生成完整计划，执行过程中不再调整
+- **简单高效**: 流程清晰，适合明确的单一任务
+- **模式匹配执行**: 通过识别任务类型选择相应的执行策略
 
 ## 🔒 安全性
 
@@ -395,10 +449,10 @@ MIT License - 详见 [LICENSE](LICENSE) 文件
 
 ## 🔗 相关链接
 
-- [GitHub仓库](https://github.com/lipish/code-agent)
-- [Docker Hub](https://hub.docker.com/r/code-agent/service)
+- [GitHub仓库](https://github.com/lipish/task-runner)
+- [Docker Hub](https://hub.docker.com/r/task-runner/service)
 - [API文档](doc/SERVICE_API.md)
 
 ---
 
-**Code Agent Service** - 让AI能力轻松集成到任何应用中。
+**Task Runner** - 简单高效的 AI 驱动任务运行服务。

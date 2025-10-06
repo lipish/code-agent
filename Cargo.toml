@@ -1,16 +1,16 @@
 [package]
-name = "code-agent"
+name = "task-runner"
 version = "0.2.0"
 edition = "2021"
 authors = ["AI Agent Team"]
-description = "AI-Native Code Assistant Library"
+description = "Simple AI-Powered Task Runner Service"
 license = "MIT"
-repository = "https://github.com/lipish/code-agent"
-keywords = ["ai", "code-assistant", "automation", "llm", "ai-native"]
+repository = "https://github.com/lipish/task-runner"
+keywords = ["ai", "task-runner", "automation", "llm", "executor"]
 categories = ["development-tools", "text-processing"]
 
 [lib]
-name = "code_agent"
+name = "task_runner"
 path = "src/lib.rs"
 
 [dependencies]
