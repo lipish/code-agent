@@ -1,6 +1,6 @@
 //! Main entry point for the AI-Native Code Agent
 
-use code_agent::cli::Cli;
+use task_runner::cli::Cli;
 use clap::Parser;
 use tracing::{info, error};
 

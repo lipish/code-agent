@@ -19,8 +19,8 @@ use tower_http::{
 use tracing::{info, warn, error};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use code_agent::service::{CodeAgentService, ServiceConfig, TaskRequest, BatchTaskRequest, TaskResponse, BatchTaskResponse, ServiceStatus, MetricsSnapshot, ServiceError};
-use code_agent::config::AgentConfig;
+use task_runner::service::{CodeAgentService, ServiceConfig, TaskRequest, BatchTaskRequest, TaskResponse, BatchTaskResponse, ServiceStatus, MetricsSnapshot, ServiceError};
+use task_runner::config::AgentConfig;
 
 #[derive(Clone)]
 struct AppState {
@@ -301,10 +301,10 @@ async fn update_model_config(
     // Update model configuration fields
     if let Some(provider) = model_update.provider {
         config.model.provider = match provider.as_str() {
-            "zhipu" => code_agent::config::ModelProvider::Zhipu,
-            "openai" => code_agent::config::ModelProvider::OpenAI,
-            "anthropic" => code_agent::config::ModelProvider::Anthropic,
-            "local" => code_agent::config::ModelProvider::Local(
+            "zhipu" => task_runner::config::ModelProvider::Zhipu,
+            "openai" => task_runner::config::ModelProvider::OpenAI,
+            "anthropic" => task_runner::config::ModelProvider::Anthropic,
+            "local" => task_runner::config::ModelProvider::Local(
                 model_update.endpoint.clone().unwrap_or_else(|| "http://localhost:8081".to_string())
             ),
             _ => return Err(ServiceError {
@@ -475,7 +475,7 @@ async fn load_service_config() -> Result<ServiceConfig, anyhow::Error> {
         max_task_timeout: 3600,
         enable_metrics,
         log_level: std::env::var("CODE_AGENT_LOG_LEVEL").unwrap_or_else(|_| "info".to_string()),
-        cors: code_agent::service::CorsConfig {
+        cors: task_runner::service::CorsConfig {
             allowed_origins: vec!["*".to_string()],
             allowed_methods: vec!["GET".to_string(), "POST".to_string(), "DELETE".to_string()],
             allowed_headers: vec!["*".to_string()],
@@ -505,17 +505,17 @@ async fn load_agent_config() -> Result<AgentConfig, anyhow::Error> {
             .ok_or_else(|| anyhow::anyhow!("CODE_AGENT_API_KEY environment variable is required"))?;
 
         let provider_config = match provider.as_str() {
-            "zhipu" => code_agent::config::ModelProvider::Zhipu,
-            "openai" => code_agent::config::ModelProvider::OpenAI,
-            "anthropic" => code_agent::config::ModelProvider::Anthropic,
-            "local" => code_agent::config::ModelProvider::Local(
+            "zhipu" => task_runner::config::ModelProvider::Zhipu,
+            "openai" => task_runner::config::ModelProvider::OpenAI,
+            "anthropic" => task_runner::config::ModelProvider::Anthropic,
+            "local" => task_runner::config::ModelProvider::Local(
                 std::env::var("CODE_AGENT_LOCAL_ENDPOINT").unwrap_or_else(|_| "http://localhost:8081".to_string())
             ),
             _ => return Err(anyhow::anyhow!("Unsupported model provider: {}", provider)),
         };
 
         Ok(AgentConfig {
-            model: code_agent::config::ModelConfig {
+            model: task_runner::config::ModelConfig {
                 provider: provider_config,
                 model_name,
                 api_key: Some(api_key),
@@ -529,7 +529,7 @@ async fn load_agent_config() -> Result<AgentConfig, anyhow::Error> {
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(0.7),
             },
-            execution: code_agent::config::ExecutionConfig {
+            execution: task_runner::config::ExecutionConfig {
                 max_steps: std::env::var("CODE_AGENT_MAX_STEPS")
                     .ok()
                     .and_then(|s| s.parse().ok())
@@ -547,7 +547,7 @@ async fn load_agent_config() -> Result<AgentConfig, anyhow::Error> {
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(300),
             },
-            tools: code_agent::config::ToolsConfig {
+            tools: task_runner::config::ToolsConfig {
                 enable_file_operations: std::env::var("CODE_AGENT_ENABLE_FILE_OPS")
                     .ok()
                     .and_then(|s| s.parse().ok())

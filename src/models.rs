@@ -1,9 +1,12 @@
 //! Language model abstraction and implementations
+//!
+//! This module now uses llm-connector for unified LLM provider access
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use crate::errors::ModelError;
+use llm_connector::{LlmClient, ChatRequest, Message as LlmMessage};
 
 /// Language model trait
 #[async_trait]
@@ -114,101 +117,54 @@ impl LanguageModel for MockModel {
     }
 }
 
-// OpenAI model implementation (placeholder)
+// OpenAI model implementation using llm-connector
 pub struct OpenAIModel {
-    _api_key: String,
+    client: LlmClient,
     model: String,
 }
 
 impl OpenAIModel {
     pub fn new(api_key: String, model: String) -> Self {
-        Self { _api_key: api_key, model }
+        Self {
+            client: LlmClient::openai(&api_key),
+            model
+        }
     }
 }
 
 #[async_trait]
 impl LanguageModel for OpenAIModel {
     async fn complete(&self, prompt: &str) -> Result<ModelResponse, ModelError> {
-        // TODO: Implement OpenAI API call
-        Ok(ModelResponse::text(format!("OpenAI response from {}: {}", self.model, prompt)))
-    }
+        let request = ChatRequest {
+            model: format!("openai/{}", self.model),
+            messages: vec![LlmMessage::user(prompt)],
+            ..Default::default()
+        };
 
-    async fn complete_with_tools(&self, prompt: &str, _tools: &[ToolDefinition]) -> Result<ModelResponse, ModelError> {
-        // TODO: Implement OpenAI API call with tools
-        Ok(ModelResponse::text(format!("OpenAI response with tools from {}: {}", self.model, prompt)))
-    }
+        let response = self.client.chat(&request)
+            .await
+            .map_err(|e| ModelError::APIError(e.to_string()))?;
 
-    fn model_name(&self) -> &str {
-        &self.model
-    }
+        let content = response.choices.first()
+            .map(|c| c.message.content.clone())
+            .unwrap_or_default();
 
-    fn supports_tools(&self) -> bool {
-        true
-    }
-}
-
-// Zhipu model implementation (placeholder)
-pub struct ZhipuModel {
-    _api_key: String,
-    model: String,
-    endpoint: Option<String>,
-}
-
-impl ZhipuModel {
-    pub fn new(api_key: String, model: String, endpoint: Option<String>) -> Self {
-        Self { _api_key: api_key, model, endpoint }
-    }
-}
-
-#[async_trait]
-impl LanguageModel for ZhipuModel {
-    async fn complete(&self, prompt: &str) -> Result<ModelResponse, ModelError> {
-        let client = reqwest::Client::new();
-        let endpoint = self.endpoint.as_ref()
-            .map(|e| format!("{}/chat/completions", e))
-            .unwrap_or_else(|| "https://open.bigmodel.cn/api/paas/v4/chat/completions".to_string());
-
-        let request_body = serde_json::json!({
-            "model": self.model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            "max_tokens": 4000,
-            "temperature": 0.7
+        let usage = response.usage.map(|u| TokenUsage {
+            prompt_tokens: u.prompt_tokens,
+            completion_tokens: u.completion_tokens,
+            total_tokens: u.total_tokens,
         });
 
-        let response = client
-            .post(&endpoint)
-            .header("Authorization", format!("Bearer {}", self._api_key))
-            .header("Content-Type", "application/json")
-            .json(&request_body)
-            .send()
-            .await
-            .map_err(|e| ModelError::APIError(e.to_string()))?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_default();
-            return Err(ModelError::APIError(format!("API request failed with status {}: {}", status, error_text)));
-        }
-
-        let response_json: serde_json::Value = response
-            .json()
-            .await
-            .map_err(|e| ModelError::APIError(e.to_string()))?;
-
-        let content = response_json["choices"][0]["message"]["content"]
-            .as_str()
-            .ok_or_else(|| ModelError::APIError("Invalid response format".to_string()))?;
-
-        Ok(ModelResponse::text(content.to_string()))
+        Ok(ModelResponse {
+            content,
+            tool_calls: vec![],
+            usage,
+            metadata: HashMap::new(),
+        })
     }
 
     async fn complete_with_tools(&self, prompt: &str, _tools: &[ToolDefinition]) -> Result<ModelResponse, ModelError> {
-        // For now, just use the regular complete method
+        // TODO: Implement tool calling support
         self.complete(prompt).await
     }
 
@@ -221,28 +177,57 @@ impl LanguageModel for ZhipuModel {
     }
 }
 
-// Anthropic model implementation (placeholder)
-pub struct AnthropicModel {
-    _api_key: String,
+// Zhipu model implementation using llm-connector
+pub struct ZhipuModel {
+    client: LlmClient,
     model: String,
 }
 
-impl AnthropicModel {
-    pub fn new(api_key: String, model: String) -> Self {
-        Self { _api_key: api_key, model }
+impl ZhipuModel {
+    pub fn new(api_key: String, model: String, _endpoint: Option<String>) -> Self {
+        // Note: llm-connector 0.2.2 doesn't have a dedicated zhipu method
+        // Zhipu uses OpenAI-compatible API, so we use openai method with custom endpoint
+        Self {
+            client: LlmClient::openai(&api_key),
+            model
+        }
     }
 }
 
 #[async_trait]
-impl LanguageModel for AnthropicModel {
+impl LanguageModel for ZhipuModel {
     async fn complete(&self, prompt: &str) -> Result<ModelResponse, ModelError> {
-        // TODO: Implement Anthropic API call
-        Ok(ModelResponse::text(format!("Anthropic response from {}: {}", self.model, prompt)))
+        let request = ChatRequest {
+            model: format!("zhipu/{}", self.model),
+            messages: vec![LlmMessage::user(prompt)],
+            ..Default::default()
+        };
+
+        let response = self.client.chat(&request)
+            .await
+            .map_err(|e| ModelError::APIError(e.to_string()))?;
+
+        let content = response.choices.first()
+            .map(|c| c.message.content.clone())
+            .unwrap_or_default();
+
+        let usage = response.usage.map(|u| TokenUsage {
+            prompt_tokens: u.prompt_tokens,
+            completion_tokens: u.completion_tokens,
+            total_tokens: u.total_tokens,
+        });
+
+        Ok(ModelResponse {
+            content,
+            tool_calls: vec![],
+            usage,
+            metadata: HashMap::new(),
+        })
     }
 
     async fn complete_with_tools(&self, prompt: &str, _tools: &[ToolDefinition]) -> Result<ModelResponse, ModelError> {
-        // TODO: Implement Anthropic API call with tools
-        Ok(ModelResponse::text(format!("Anthropic response with tools from {}: {}", self.model, prompt)))
+        // TODO: Implement tool calling support
+        self.complete(prompt).await
     }
 
     fn model_name(&self) -> &str {
@@ -254,28 +239,116 @@ impl LanguageModel for AnthropicModel {
     }
 }
 
-// Local model implementation (placeholder)
+// Anthropic model implementation using llm-connector
+pub struct AnthropicModel {
+    client: LlmClient,
+    model: String,
+}
+
+impl AnthropicModel {
+    pub fn new(api_key: String, model: String) -> Self {
+        Self {
+            client: LlmClient::anthropic(&api_key),
+            model
+        }
+    }
+}
+
+#[async_trait]
+impl LanguageModel for AnthropicModel {
+    async fn complete(&self, prompt: &str) -> Result<ModelResponse, ModelError> {
+        let request = ChatRequest {
+            model: format!("anthropic/{}", self.model),
+            messages: vec![LlmMessage::user(prompt)],
+            ..Default::default()
+        };
+
+        let response = self.client.chat(&request)
+            .await
+            .map_err(|e| ModelError::APIError(e.to_string()))?;
+
+        let content = response.choices.first()
+            .map(|c| c.message.content.clone())
+            .unwrap_or_default();
+
+        let usage = response.usage.map(|u| TokenUsage {
+            prompt_tokens: u.prompt_tokens,
+            completion_tokens: u.completion_tokens,
+            total_tokens: u.total_tokens,
+        });
+
+        Ok(ModelResponse {
+            content,
+            tool_calls: vec![],
+            usage,
+            metadata: HashMap::new(),
+        })
+    }
+
+    async fn complete_with_tools(&self, prompt: &str, _tools: &[ToolDefinition]) -> Result<ModelResponse, ModelError> {
+        // TODO: Implement tool calling support
+        self.complete(prompt).await
+    }
+
+    fn model_name(&self) -> &str {
+        &self.model
+    }
+
+    fn supports_tools(&self) -> bool {
+        true
+    }
+}
+
+// Local model implementation using llm-connector
 pub struct LocalModel {
-    _endpoint: String,
+    client: LlmClient,
     model: String,
 }
 
 impl LocalModel {
     pub fn new(endpoint: String, model: String) -> Self {
-        Self { _endpoint: endpoint, model }
+        // Use ollama_at for custom local endpoints
+        Self {
+            client: LlmClient::ollama_at(&endpoint),
+            model
+        }
     }
 }
 
 #[async_trait]
 impl LanguageModel for LocalModel {
     async fn complete(&self, prompt: &str) -> Result<ModelResponse, ModelError> {
-        // TODO: Implement local model API call
-        Ok(ModelResponse::text(format!("Local model response from {}: {}", self.model, prompt)))
+        let request = ChatRequest {
+            model: self.model.clone(),
+            messages: vec![LlmMessage::user(prompt)],
+            ..Default::default()
+        };
+
+        let response = self.client.chat(&request)
+            .await
+            .map_err(|e| ModelError::APIError(e.to_string()))?;
+
+        let content = response.choices.first()
+            .map(|c| c.message.content.clone())
+            .unwrap_or_default();
+
+        let usage = response.usage.map(|u| TokenUsage {
+            prompt_tokens: u.prompt_tokens,
+            completion_tokens: u.completion_tokens,
+            total_tokens: u.total_tokens,
+        });
+
+        Ok(ModelResponse {
+            content,
+            tool_calls: vec![],
+            usage,
+            metadata: HashMap::new(),
+        })
     }
 
     async fn complete_with_tools(&self, prompt: &str, _tools: &[ToolDefinition]) -> Result<ModelResponse, ModelError> {
-        // TODO: Implement local model API call with tools
-        Ok(ModelResponse::text(format!("Local model response with tools from {}: {}", self.model, prompt)))
+        // Local models typically don't support tool calling
+        self.complete(prompt).await
     }
 
     fn model_name(&self) -> &str {

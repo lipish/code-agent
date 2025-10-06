@@ -1,3 +1,14 @@
+# AI Config
+.claude
+.trae
+.augment
+
+# IDE Config
+.vscode
+
+# Private
+keys.yaml
+
 # OS/editor
 .DS_Store
 .idea/
@@ -14,4 +25,3 @@ node_modules/
 
 # Ignore the cloned Roo-Code analysis directory unless explicitly needed
 Roo-Code/
-
