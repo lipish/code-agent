@@ -10,7 +10,7 @@
 
 | 类型 | 命名风格 | 示例 |
 |------|---------|------|
-| 模块 | `snake_case` | `task_helpers`, `execution` |
+| 模块 | `snake_case` | `parser`, `execution` |
 | 函数/方法 | `snake_case` | `read_file`, `process_task` |
 | 变量 | `snake_case` | `task_result`, `file_path` |
 | 常量 | `SCREAMING_SNAKE_CASE` | `MAX_FILE_SIZE`, `ALLOWED_COMMANDS` |

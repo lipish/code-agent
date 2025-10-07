@@ -356,19 +356,19 @@ impl MetricsCollector {
 }
 ```
 
-#### 5. AI 理解引擎 (UnderstandingEngine)
+#### 5. AI 理解引擎 (PlanningEngine)
 
 负责理解和分析用户任务，制定执行策略。集成提示词工程系统。
 
 **文件位置：** `src/understanding.rs` (186行，重构后)
 
 ```rust
-pub struct UnderstandingEngine {
+pub struct PlanningEngine {
     model: Arc<dyn LanguageModel>,
     prompt_template: PromptTemplate,  // 提示词模板系统
 }
 
-impl UnderstandingEngine {
+impl PlanningEngine {
     // 使用默认模板创建
     pub fn new(model: Arc<dyn LanguageModel>) -> Self {
         Self {
@@ -591,12 +591,12 @@ pub struct PromptBuilder {
 
 ```rust
 // 使用默认模板
-let engine = UnderstandingEngine::new(model);
+let engine = PlanningEngine::new(model);
 let plan = engine.understand_task("创建配置加载器").await?;
 
 // 使用自定义模板
 let template = PromptTemplate::from_file("prompts/rust-project.yaml")?;
-let engine = UnderstandingEngine::with_template(model, template);
+let engine = PlanningEngine::with_template(model, template);
 
 // 指定任务类型
 let plan = engine

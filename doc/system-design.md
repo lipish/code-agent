@@ -356,19 +356,19 @@ impl MetricsCollector {
 }
 ```
 
-#### 5. AI Understanding Engine (UnderstandingEngine)
+#### 5. AI Understanding Engine (PlanningEngine)
 
 Responsible for understanding and analyzing user tasks, formulating execution strategies.
 
 **File Location:** `src/understanding.rs`
 
 ```rust
-pub struct UnderstandingEngine {
+pub struct PlanningEngine {
     model: Arc<dyn LanguageModel>,
     context: TaskContext,
 }
 
-impl UnderstandingEngine {
+impl PlanningEngine {
     pub async fn understand(&self, request: &str) -> Result<TaskPlan, AgentError> {
         let prompt = self.build_understanding_prompt(request);
         let response = self.model.complete(&prompt).await?;

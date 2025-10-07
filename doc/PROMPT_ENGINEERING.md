@@ -45,7 +45,7 @@ Task Runner 实现了一个灵活、分层的提示词工程系统，灵感来�
 - 动态注入上下文
 - 自动推断任务类型
 
-**UnderstandingEngine**: 集成提示词系统
+**PlanningEngine**: 集成提示词系统
 - 使用模板生成提示词
 - 自动任务类型推断
 - 支持自定义模板加载
@@ -55,18 +55,19 @@ Task Runner 实现了一个灵活、分层的提示词工程系统，灵感来�
 ### 1. 使用默认模板
 
 ```rust
-use task_runner::understanding::UnderstandingEngine;
-use task_runner::models::ZhipuModel;
+use task_runner::planning::PlanningEngine;
+use task_runner::models::LlmModel;
+use task_runner::config::ModelConfig;
 use std::sync::Arc;
 
 // 创建模型
-let model = Arc::new(ZhipuModel::new(config)?);
+let model = Arc::new(LlmModel::from_config(config.model)?);
 
-// 创建理解引擎（使用默认模板）
-let engine = UnderstandingEngine::new(model);
+// 创建规划引擎（使用默认模板）
+let engine = PlanningEngine::new(model);
 
 // 分析任务
-let plan = engine.understand_task("创建一个配置加载器").await?;
+let plan = engine.analyze_task("创建一个配置加载器").await?;
 ```
 
 ### 2. 使用自定义模板
@@ -78,10 +79,10 @@ use task_runner::prompts::PromptTemplate;
 let template = PromptTemplate::from_file("prompts/rust-project.yaml")?;
 
 // 创建引擎
-let engine = UnderstandingEngine::with_template(model, template);
+let engine = PlanningEngine::with_template(model, template);
 
 // 分析任务
-let plan = engine.understand_task("重构错误处理").await?;
+let plan = engine.analyze_task("重构错误处理").await?;
 ```
 
 ### 3. 指定任务类型
@@ -89,7 +90,7 @@ let plan = engine.understand_task("重构错误处理").await?;
 ```rust
 // 显式指定任务类型
 let plan = engine
-    .understand_task_with_type("优化字符串拼接", Some("optimization"))
+    .analyze_task_with_type("优化字符串拼接", Some("optimization"))
     .await?;
 ```
 
@@ -113,12 +114,12 @@ println!("{}", prompt);
 ### 5. 动态加载模板
 
 ```rust
-let mut engine = UnderstandingEngine::new(model);
+let mut engine = PlanningEngine::new(model);
 
 // 运行时加载新模板
 engine.load_template("prompts/custom-template.yaml")?;
 
-let plan = engine.understand_task("实现新功能").await?;
+let plan = engine.analyze_task("实现新功能").await?;
 ```
 
 ## 内置场景
@@ -262,7 +263,7 @@ scenarios:
 
 ## 任务类型自动推断
 
-UnderstandingEngine 会根据请求内容自动推断任务类型：
+PlanningEngine 会根据请求内容自动推断任务类型：
 
 | 关键词 | 推断类型 |
 |--------|----------|
@@ -280,13 +281,13 @@ UnderstandingEngine 会根据请求内容自动推断任务类型：
 
 ```rust
 // 自动推断为 "testing"
-engine.understand_task("为 PromptBuilder 编写单元测试").await?;
+engine.analyze_task("为 PromptBuilder 编写单元测试").await?;
 
 // 自动推断为 "refactoring"
-engine.understand_task("重构 agent.rs 的执行逻辑").await?;
+engine.analyze_task("重构 agent.rs 的执行逻辑").await?;
 
 // 自动推断为 "debugging"
-engine.understand_task("修复编译错误").await?;
+engine.analyze_task("修复编译错误").await?;
 ```
 
 ## 最佳实践
@@ -369,8 +370,8 @@ template.to_file("prompts/modified-template.yaml")?;
 let rust_template = PromptTemplate::from_file("prompts/rust-project.yaml")?;
 let python_template = PromptTemplate::from_file("prompts/python-project.yaml")?;
 
-let rust_engine = UnderstandingEngine::with_template(model.clone(), rust_template);
-let python_engine = UnderstandingEngine::with_template(model.clone(), python_template);
+let rust_engine = PlanningEngine::with_template(model.clone(), rust_template);
+let python_engine = PlanningEngine::with_template(model.clone(), python_template);
 ```
 
 ## 与 Codex/Roo-Code 对比

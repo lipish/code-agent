@@ -10,11 +10,11 @@
 
 **核心结构**:
 ```rust
-pub struct UnderstandingEngine {
+pub struct PlanningEngine {
     model: Arc<dyn LanguageModel>,
 }
 
-impl UnderstandingEngine {
+impl PlanningEngine {
     // 创建新的理解引擎
     pub fn new(model: Arc<dyn LanguageModel>) -> Self
     
@@ -31,11 +31,11 @@ impl UnderstandingEngine {
 
 **使用示例**:
 ```rust
-use task_runner::understanding::UnderstandingEngine;
+use task_runner::planning::PlanningEngine;
 use std::sync::Arc;
 
 let model = Arc::new(create_your_model());
-let engine = UnderstandingEngine::new(model);
+let engine = PlanningEngine::new(model);
 let plan = engine.understand_task("读取 README.md 文件").await?;
 
 println!("理解: {}", plan.understanding);
@@ -49,7 +49,7 @@ println!("复杂度: {:?}", plan.complexity);
 
 **原因**:
 - 支持多个组件共享同一模型实例
-- `UnderstandingEngine` 和 `CodeAgent` 可以共享模型
+- `PlanningEngine` 和 `CodeAgent` 可以共享模型
 - 更好的内存效率
 
 **迁移指南**:
@@ -117,7 +117,7 @@ pub fn get_model(&self) -> &Arc<dyn LanguageModel>
    ▼
 CodeAgent::process_task()
    │
-   ├─▶ UnderstandingEngine::understand_task()
+   ├─▶ PlanningEngine::understand_task()
    │      │
    │      ├─▶ build_understanding_prompt()
    │      ├─▶ model.complete()
@@ -230,13 +230,13 @@ impl ToolRegistry {
 #[tokio::test]
 async fn test_understanding_engine_creation() {
     let model = Arc::new(MockModel::new("test".to_string()));
-    let _engine = UnderstandingEngine::new(model);
+    let _engine = PlanningEngine::new(model);
 }
 
 #[tokio::test]
 async fn test_parse_task_plan() {
     let model = Arc::new(MockModel::new("test".to_string()));
-    let engine = UnderstandingEngine::new(model);
+    let engine = PlanningEngine::new(model);
     
     let response = "UNDERSTANDING: Read a file\n...";
     let plan = engine.parse_task_plan(response).unwrap();
@@ -257,7 +257,7 @@ async fn test_parse_task_plan_with_requirements() {
 cargo test
 
 # 运行特定模块测试
-cargo test understanding::tests
+cargo test planning::tests
 
 # 运行特定测试
 cargo test test_parse_task_plan
@@ -282,15 +282,15 @@ cargo test -- --nocapture
 ### Q: 为什么使用 Arc 而不是 Box？
 
 **A**: `Arc` 允许多个所有者共享同一数据，这对于以下场景很重要：
-- `CodeAgent` 和 `UnderstandingEngine` 共享模型
+- `CodeAgent` 和 `PlanningEngine` 共享模型
 - 未来可能的并发执行场景
 - 更灵活的架构设计
 
 ### Q: 如何添加新的理解策略？
 
-**A**: 在 `UnderstandingEngine` 中添加新方法：
+**A**: 在 `PlanningEngine` 中添加新方法：
 ```rust
-impl UnderstandingEngine {
+impl PlanningEngine {
     pub async fn understand_with_context(
         &self, 
         request: &str, 

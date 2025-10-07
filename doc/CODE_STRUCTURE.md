@@ -95,7 +95,7 @@ async fn main() -> anyhow::Result<()> {
 - `LanguageModel` - AI模型接口
 - `Tool` - 工具系统接口
 - `PromptTemplate` - 提示词模板
-- `UnderstandingEngine` - 任务理解引擎
+- `PlanningEngine` - 任务理解引擎
 - `TaskRequest/TaskResponse` - 服务类型 (需要 "service" feature)
 
 **模块组织**:
@@ -104,7 +104,7 @@ pub mod agent;         // 核心代理 (296行) [重构精简]
 pub mod config;        // 配置管理
 pub mod models;        // AI模型
 pub mod prompts;       // 提示词工程系统 (300行) [新增]
-pub mod task_helpers;  // 任务辅助函数 (292行) [新增]
+pub mod parser;  // 任务辅助函数 (292行) [新增]
 pub mod tools;         // 工具系统
 pub mod types;         // 类型定义
 pub mod errors;        // 错误处理
@@ -135,7 +135,7 @@ pub struct TaskAgent {
     model: Arc<dyn LanguageModel>,           // 改为Arc支持共享
     tools: Arc<Mutex<ToolRegistry>>,
     config: AgentConfig,
-    understanding_engine: UnderstandingEngine, // 新增：专门的理解引擎
+    understanding_engine: PlanningEngine, // 新增：专门的理解引擎
     _error_handler: ErrorHandler,
 }
 
@@ -152,23 +152,23 @@ impl TaskAgent {
 - `TaskAgent` 是一个 **struct**（结构体），不是 trait（特征）
 - 从 v0.2.1 开始，`CodeAgent` 重命名为 `TaskAgent` 以体现其通用性
 - `CodeAgent` 作为别名保留以保持向后兼容，但已标记为 deprecated
-- 辅助函数（文件操作、命令执行、文本解析）已移至 `task_helpers` 模块
+- 辅助函数（文件操作、命令执行、文本解析）已移至 `parser` 模块
 
 **职责分离**:
 - `agent.rs` - 主工作流程：任务理解、执行协调、结果生成
-- `task_helpers.rs` - 辅助功能：文件操作、命令执行、文本解析
+- `parser.rs` - 辅助功能：文件操作、命令执行、文本解析
 
 **主要方法**:
 - `new()` - 创建新的代理实例（自动创建理解引擎）
 - `process_task()` - 处理任务的主入口
-- `understand_task()` - 委托给 UnderstandingEngine
+- `understand_task()` - 委托给 PlanningEngine
 - `execute_task_real()` - 执行任务
 - `register_tool()` - 注册工具
 - `get_model()` - 获取模型引用
 
 **工作流程** (优化后):
 1. 接收任务请求
-2. 理解阶段: 委托给 UnderstandingEngine（使用提示词模板）
+2. 理解阶段: 委托给 PlanningEngine（使用提示词模板）
 3. 执行阶段: 根据理解结果执行任务
 4. 返回结果
 
@@ -318,7 +318,7 @@ pub struct ErrorHandler {
 
 **核心结构**:
 ```rust
-pub struct UnderstandingEngine {
+pub struct PlanningEngine {
     model: Arc<dyn LanguageModel>,
     prompt_template: PromptTemplate,  // 提示词模板
 }
@@ -404,8 +404,8 @@ pub struct PromptBuilder {
 
 详见：[提示词工程文档](./PROMPT_ENGINEERING.md)
 
-### 12. **task_helpers.rs** - 任务辅助函数
-**路径**: `src/task_helpers.rs` (292行，新增)
+### 12. **parser.rs** - 任务辅助函数
+**路径**: `src/parser.rs` (292行，新增)
 **功能**: 提供任务执行的辅助功能，从 agent.rs 分离出来
 
 **核心函数**:
@@ -510,7 +510,7 @@ task-runner/
 │   ├── execution.rs       # 执行引擎
 │   ├── models.rs          # AI模型
 │   ├── prompts.rs         # 提示词工程系统 (300行，新增)
-│   ├── task_helpers.rs    # 任务辅助函数 (292行，新增)
+│   ├── parser.rs    # 任务辅助函数 (292行，新增)
 │   ├── tools.rs           # 工具系统
 │   ├── types.rs           # 类型定义
 │   ├── understanding.rs   # 理解引擎 (186行，重构后)
