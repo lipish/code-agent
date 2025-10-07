@@ -8,6 +8,7 @@ use tokio::time::timeout;
 use chrono::Utc;
 use uuid::Uuid;
 use tracing::info;
+use dashmap::DashMap;
 
 use crate::agent::TaskAgent;
 use crate::config::AgentConfig;
@@ -33,8 +34,8 @@ pub struct CodeAgentService {
     metrics: Arc<MetricsCollector>,
     /// Agent instance
     agent: Arc<RwLock<TaskAgent>>,
-    /// Active tasks
-    active_tasks: Arc<RwLock<HashMap<String, Arc<RwLock<TaskContext>>>>>,
+    /// Active tasks - using DashMap for lock-free concurrent access
+    active_tasks: Arc<DashMap<String, TaskContext>>,
     /// Semaphore for limiting concurrent tasks
     task_semaphore: Arc<Semaphore>,
     /// Available tools
@@ -80,7 +81,7 @@ impl CodeAgentService {
             task_semaphore: Arc::new(Semaphore::new(config.max_concurrent_tasks as usize)),
             metrics: Arc::new(MetricsCollector::new()),
             agent: Arc::new(RwLock::new(agent)),
-            active_tasks: Arc::new(RwLock::new(HashMap::new())),
+            active_tasks: Arc::new(DashMap::new()),
             config,
         };
 
@@ -107,7 +108,7 @@ impl CodeAgentService {
         self.metrics.record_task_start().await;
 
         // Create task context
-        let task_context = Arc::new(RwLock::new(TaskContext {
+        let task_context = TaskContext {
             task_id: task_id.clone(),
             request: request.clone(),
             status: TaskStatus::Running,
@@ -132,13 +133,10 @@ impl CodeAgentService {
                 custom_metrics: Some(HashMap::new()),
             },
             current_step: 0,
-        }));
+        };
 
         // Register active task
-        {
-            let mut active_tasks = self.active_tasks.write().await;
-            active_tasks.insert(task_id.clone(), task_context.clone());
-        }
+        self.active_tasks.insert(task_id.clone(), task_context);
 
         // Execute the task with timeout
         let task_timeout = Duration::from_secs(
@@ -149,13 +147,10 @@ impl CodeAgentService {
                 .unwrap_or(self.config.default_task_timeout.unwrap_or(self.config.request_timeout_seconds))
         );
 
-        let result = timeout(task_timeout, self.execute_task_internal(task_context.clone())).await;
+        let result = timeout(task_timeout, self.execute_task_internal(task_id.clone())).await;
 
         // Remove from active tasks
-        {
-            let mut active_tasks = self.active_tasks.write().await;
-            active_tasks.remove(&task_id);
-        }
+        self.active_tasks.remove(&task_id);
 
         match result {
             Ok(task_result) => {
@@ -170,14 +165,19 @@ impl CodeAgentService {
                 self.metrics.record_task_completion(0.0, false).await;
                 self.metrics.record_error("timeout").await;
 
-                let context = task_context.read().await;
+                let (plan, steps, metrics) = if let Some(context) = self.active_tasks.get(&task_id) {
+                    (context.plan.clone(), context.steps.clone(), context.metrics.clone())
+                } else {
+                    (None, Vec::new(), TaskMetrics::default())
+                };
+
                 Ok(TaskResponse {
                     task_id: task_id.clone(),
                     status: TaskStatus::Timeout,
                     result: None,
-                    plan: context.plan.clone(),
-                    steps: context.steps.clone(),
-                    metrics: context.metrics.clone(),
+                    plan,
+                    steps,
+                    metrics,
                     error: Some(error),
                     created_at: Utc::now(),
                     started_at: Some(Utc::now()),
@@ -268,17 +268,14 @@ impl CodeAgentService {
 
     /// Get task status
     pub async fn get_task_status(&self, task_id: &str) -> ServiceResult<TaskResponse> {
-        let active_tasks = self.active_tasks.read().await;
-
-        if let Some(task_context) = active_tasks.get(task_id) {
-            let context = task_context.read().await;
+        if let Some(task_context) = self.active_tasks.get(task_id) {
             Ok(TaskResponse {
                 task_id: task_id.to_string(),
-                status: context.status.clone(),
+                status: task_context.status.clone(),
                 result: None,
-                plan: context.plan.clone(),
-                steps: context.steps.clone(),
-                metrics: context.metrics.clone(),
+                plan: task_context.plan.clone(),
+                steps: task_context.steps.clone(),
+                metrics: task_context.metrics.clone(),
                 error: None,
                 created_at: Utc::now(),
                 started_at: Some(Utc::now()),
@@ -291,11 +288,8 @@ impl CodeAgentService {
 
     /// Cancel a running task
     pub async fn cancel_task(&self, task_id: &str) -> ServiceResult<()> {
-        let active_tasks = self.active_tasks.write().await;
-
-        if let Some(task_context) = active_tasks.get(task_id) {
-            let mut context = task_context.write().await;
-            context.status = TaskStatus::Cancelled;
+        if let Some(mut task_context) = self.active_tasks.get_mut(task_id) {
+            task_context.status = TaskStatus::Cancelled;
             info!("Task {} cancelled", task_id);
             Ok(())
         } else {
@@ -334,18 +328,25 @@ impl CodeAgentService {
     }
 
     /// Internal task execution
-    async fn execute_task_internal(&self, task_context: Arc<RwLock<TaskContext>>) -> TaskResponse {
-        let task_id = {
-            let context = task_context.read().await;
-            context.task_id.clone()
-        };
-
+    async fn execute_task_internal(&self, task_id: String) -> TaskResponse {
         info!("Starting internal execution for task: {}", task_id);
 
-        // Extract task request
-        let (task_request, task_id_clone) = {
-            let context = task_context.read().await;
-            (context.request.clone(), context.task_id.clone())
+        // Get task request from active tasks
+        let task_request = if let Some(context) = self.active_tasks.get(&task_id) {
+            context.request.clone()
+        } else {
+            return TaskResponse {
+                task_id: task_id.clone(),
+                status: TaskStatus::Failed,
+                result: None,
+                plan: None,
+                steps: Vec::new(),
+                metrics: TaskMetrics::default(),
+                error: Some(ErrorBuilder::task_not_found(&task_id)),
+                created_at: Utc::now(),
+                started_at: Some(Utc::now()),
+                completed_at: Some(Utc::now()),
+            };
         };
 
         let planning_start = Instant::now();
@@ -403,20 +404,24 @@ impl CodeAgentService {
                     let service_error = ServiceErrorType::from(e).to_service_error();
                     self.metrics.record_error(&service_error.code).await;
 
-                    return {
-                        let context = task_context.read().await;
-                        TaskResponse {
-                            task_id: task_id_clone,
-                            status: TaskStatus::Failed,
-                            result: None,
-                            plan: None,
-                            steps,
-                            metrics: context.metrics.clone(),
-                            error: Some(service_error),
-                            created_at: Utc::now(),
-                            started_at: Some(Utc::now()),
-                            completed_at: Some(Utc::now()),
-                        }
+                    // Get metrics from context
+                    let metrics = if let Some(context) = self.active_tasks.get(&task_id) {
+                        context.metrics.clone()
+                    } else {
+                        TaskMetrics::default()
+                    };
+
+                    return TaskResponse {
+                        task_id: task_id.clone(),
+                        status: TaskStatus::Failed,
+                        result: None,
+                        plan: None,
+                        steps,
+                        metrics,
+                        error: Some(service_error),
+                        created_at: Utc::now(),
+                        started_at: Some(Utc::now()),
+                        completed_at: Some(Utc::now()),
                     };
                 }
             }
@@ -474,8 +479,7 @@ impl CodeAgentService {
             });
 
             // Update task context
-            {
-                let mut context = task_context.write().await;
+            if let Some(mut context) = self.active_tasks.get_mut(&task_id) {
                 context.status = if agent_result.success {
                     TaskStatus::Completed
                 } else {
@@ -489,9 +493,15 @@ impl CodeAgentService {
                 context.metrics.steps_executed = steps.len() as u32;
             }
 
-            let context = task_context.read().await;
+            // Get final metrics
+            let metrics = if let Some(context) = self.active_tasks.get(&task_id) {
+                context.metrics.clone()
+            } else {
+                TaskMetrics::default()
+            };
+
             TaskResponse {
-                task_id: task_id_clone,
+                task_id: task_id.clone(),
                 status: if agent_result.success { TaskStatus::Completed } else { TaskStatus::Failed },
                 result: Some(service_types::TaskResult {
                     success: agent_result.success,
@@ -502,21 +512,27 @@ impl CodeAgentService {
                 }),
                 plan: agent_result.task_plan.map(convert_task_plan),
                 steps,
-                metrics: context.metrics.clone(),
+                metrics,
                 error: None,
                 created_at: Utc::now(),
                 started_at: Some(Utc::now()),
                 completed_at: Some(Utc::now()),
             }
         } else {
-            let context = task_context.read().await;
+            // Get metrics from context
+            let metrics = if let Some(context) = self.active_tasks.get(&task_id) {
+                context.metrics.clone()
+            } else {
+                TaskMetrics::default()
+            };
+
             TaskResponse {
-                task_id: task_id_clone,
+                task_id: task_id.clone(),
                 status: TaskStatus::Failed,
                 result: None,
                 plan: None,
                 steps,
-                metrics: context.metrics.clone(),
+                metrics,
                 error: Some(ErrorBuilder::task_execution_failed("No result from agent")),
                 created_at: Utc::now(),
                 started_at: Some(Utc::now()),
