@@ -17,6 +17,7 @@ fn main() {
     println!();
 
     // Demonstrate each agent type
+    demonstrate_agent(AgentType::Generic, "Help me with this task");
     demonstrate_agent(AgentType::Code, "Refactor error handling in agent.rs");
     demonstrate_agent(AgentType::Data, "Analyze user activity logs and generate report");
     demonstrate_agent(AgentType::DevOps, "Set up CI/CD pipeline with GitHub Actions");
@@ -82,6 +83,11 @@ fn demonstrate_agent(agent_type: AgentType, task: &str) {
     // Show what this agent is good at
     println!("\n✨ Specialized For:");
     match agent_type {
+        AgentType::Generic => {
+            println!("   • Adapts to any task or domain");
+            println!("   • No predefined specialization");
+            println!("   • Results depend entirely on your prompt");
+        }
         AgentType::Code => {
             println!("   • Software development and architecture");
             println!("   • Code refactoring and optimization");

@@ -10,7 +10,37 @@ use std::collections::HashMap;
 // Agent Type Definitions
 // ============================================================================
 
-/// Code Agent - Default agent for software development tasks
+/// Generic Agent - Default agent for general-purpose tasks
+///
+/// This is a non-specific, flexible agent that adapts to any task.
+/// The returned content depends entirely on your prompt.
+pub const GENERIC_AGENT_ROLE: &str = "\
+You are a **Generic Agent** - a versatile, intelligent assistant that adapts to any task.
+
+**Your Nature**:
+- Flexible and adaptable to any domain
+- No predefined specialization
+- Learn from the task description
+- Adjust approach based on context
+
+**Your Personality**:
+- Concise, direct, and friendly
+- Communicate efficiently without unnecessary detail
+- Prioritize actionable guidance
+- Clearly state assumptions and next steps
+
+**Your Approach**:
+- Understand the task thoroughly
+- Determine the appropriate domain and methods
+- Plan solutions with clear phases
+- Execute efficiently with minimal changes
+- Adapt to the specific requirements
+
+**Key Principle**:
+The returned content depends entirely on your prompt. You analyze the request,
+determine what's needed, and provide appropriate results or plans accordingly.";
+
+/// Code Agent - Specialized agent for software development tasks
 pub const CODE_AGENT_ROLE: &str = "\
 You are a **Code Agent** - a precise, safe, and helpful coding assistant with full autonomy.
 
@@ -177,8 +207,11 @@ You are a **Security Agent** - an expert in application security and compliance.
 - Validate all inputs
 - Document security decisions";
 
-/// Default system role (Code Agent)
-pub const SYSTEM_ROLE: &str = CODE_AGENT_ROLE;
+/// Default system role (Generic Agent)
+///
+/// This is a non-specific, flexible agent that adapts to any task.
+/// The returned content depends entirely on your prompt.
+pub const SYSTEM_ROLE: &str = GENERIC_AGENT_ROLE;
 
 /// Output format type
 pub const OUTPUT_FORMAT_TYPE: &str = "structured_text";
@@ -230,7 +263,10 @@ pub const SAFETY: &[&str] = &[
 /// Available agent types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentType {
-    /// Code development agent (default)
+    /// Generic agent - adapts to any task (default)
+    /// The returned content depends entirely on your prompt
+    Generic,
+    /// Code development agent
     Code,
     /// Data processing agent
     Data,
@@ -250,6 +286,7 @@ impl AgentType {
     /// Get the system role for this agent type
     pub fn system_role(&self) -> &'static str {
         match self {
+            AgentType::Generic => GENERIC_AGENT_ROLE,
             AgentType::Code => CODE_AGENT_ROLE,
             AgentType::Data => DATA_AGENT_ROLE,
             AgentType::DevOps => DEVOPS_AGENT_ROLE,
@@ -263,6 +300,7 @@ impl AgentType {
     /// Get agent type from string
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
+            "generic" | "general" | "default" => Some(AgentType::Generic),
             "code" => Some(AgentType::Code),
             "data" => Some(AgentType::Data),
             "devops" => Some(AgentType::DevOps),
@@ -277,6 +315,7 @@ impl AgentType {
     /// Get all available agent types
     pub fn all() -> &'static [AgentType] {
         &[
+            AgentType::Generic,
             AgentType::Code,
             AgentType::Data,
             AgentType::DevOps,
@@ -290,7 +329,7 @@ impl AgentType {
 
 impl Default for AgentType {
     fn default() -> Self {
-        AgentType::Code
+        AgentType::Generic
     }
 }
 
@@ -364,8 +403,8 @@ mod tests {
     #[test]
     fn test_system_role_not_empty() {
         assert!(!SYSTEM_ROLE.is_empty());
-        assert!(SYSTEM_ROLE.contains("Code Agent"));
-        assert!(SYSTEM_ROLE.contains("Concise"));
+        assert!(SYSTEM_ROLE.contains("Generic Agent"));
+        assert!(SYSTEM_ROLE.contains("versatile"));
     }
 
     #[test]
@@ -427,6 +466,9 @@ mod tests {
 
     #[test]
     fn test_agent_type_from_str() {
+        assert_eq!(AgentType::from_str("generic"), Some(AgentType::Generic));
+        assert_eq!(AgentType::from_str("general"), Some(AgentType::Generic));
+        assert_eq!(AgentType::from_str("default"), Some(AgentType::Generic));
         assert_eq!(AgentType::from_str("code"), Some(AgentType::Code));
         assert_eq!(AgentType::from_str("data"), Some(AgentType::Data));
         assert_eq!(AgentType::from_str("devops"), Some(AgentType::DevOps));
@@ -461,6 +503,10 @@ mod tests {
 
     #[test]
     fn test_global_template_for_agent() {
+        // Test Generic Agent
+        let generic_template = global_template_for_agent(AgentType::Generic);
+        assert!(generic_template.system_role.contains("Generic Agent"));
+
         // Test Code Agent
         let code_template = global_template_for_agent(AgentType::Code);
         assert!(code_template.system_role.contains("Code Agent"));
@@ -477,7 +523,14 @@ mod tests {
     #[test]
     fn test_default_agent_type() {
         let default_type = AgentType::default();
-        assert_eq!(default_type, AgentType::Code);
+        assert_eq!(default_type, AgentType::Generic);
+    }
+
+    #[test]
+    fn test_generic_agent_role() {
+        assert!(GENERIC_AGENT_ROLE.contains("Generic Agent"));
+        assert!(GENERIC_AGENT_ROLE.contains("versatile"));
+        assert!(GENERIC_AGENT_ROLE.contains("depends entirely on your prompt"));
     }
 }
 
