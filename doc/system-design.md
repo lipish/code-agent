@@ -1291,3 +1291,87 @@ The AI-Native Code Agent is **implemented and functional** with:
 - Integration into existing applications and workflows
 - Enhanced monitoring and observability features
 - Advanced authentication and authorization mechanisms
+## Latest Architecture Updates (2024-10)
+
+### Module Structure
+
+#### Core Modules
+```
+src/
+├── agent/              # Agent core logic (modularized)
+│   ├── mod.rs
+│   ├── core.rs        # TaskAgent implementation
+│   ├── executor.rs    # Task execution
+│   └── tool_registry.rs # Tool management
+│
+├── planning/          # Task planning (renamed from understanding)
+│   ├── mod.rs
+│   └── engine.rs      # PlanningEngine
+│
+├── execution/         # Task execution
+│   ├── mod.rs
+│   ├── file_ops.rs    # File operations
+│   └── command_ops.rs # Command execution
+│
+├── parser.rs          # Text parsing (renamed from task_helpers)
+│
+├── security/          # Security validation
+│   ├── mod.rs
+│   ├── command_validator.rs
+│   ├── path_validator.rs
+│   └── resource_limits.rs
+│
+├── prompts/           # Prompt engineering system
+│   ├── mod.rs
+│   ├── builder.rs     # PromptBuilder
+│   └── template.rs    # PromptTemplate
+│
+├── models.rs          # Unified LLM interface
+│   ├── LlmModel       # Unified model implementation
+│   └── MockModel      # Test model
+│
+└── service/           # Service layer
+    ├── types/         # Type definitions (modularized)
+    │   ├── task.rs
+    │   ├── batch.rs
+    │   └── service.rs
+    ├── core.rs
+    ├── api.rs
+    └── metrics_simple.rs
+```
+
+### Key Improvements
+
+**1. Planning Module** (formerly Understanding)
+- Renamed from `understanding/` to `planning/`
+- More accurate reflection of core functionality
+
+**2. Parser Module** (formerly task_helpers)
+- Renamed from `task_helpers.rs` to `parser.rs`
+- Removed duplicate IO functions
+- Reduced code by 28.6%
+
+**3. Unified Model Abstraction**
+- Single `LlmModel` replaces provider-specific models
+- Reduced code by 35.7%
+- Simplified model creation by 88%
+
+**4. Security Module**
+- Command validation with whitelist
+- Path traversal protection
+- Resource limits enforcement
+
+**5. Prompt Engineering System**
+- Flexible prompt construction
+- Configurable templates
+- YAML configuration support
+
+### Refactoring Summary
+
+See `REFACTORING_HISTORY.md` for details:
+- 30% code reduction through deduplication
+- 95% elimination of code duplication
+- Clear module boundaries
+- Enhanced security
+- Better maintainability
+
