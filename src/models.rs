@@ -1,11 +1,18 @@
 //! Language model abstraction and implementations
 //!
-//! This module now uses llm-connector for unified LLM provider access
+//! This module provides a unified interface for different LLM providers using llm-connector.
+//!
+//! # Design Philosophy
+//!
+//! Instead of creating separate Model structs for each provider (OpenAI, Zhipu, Anthropic),
+//! we use a single `LlmModel` that wraps `llm-connector::LlmClient`. This eliminates code
+//! duplication and leverages llm-connector's unified interface.
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use crate::errors::ModelError;
+use crate::config::{ModelConfig, ModelProvider};
 use llm_connector::{LlmClient, ChatRequest, Message as LlmMessage};
 
 /// Language model trait
@@ -117,34 +124,59 @@ impl LanguageModel for MockModel {
     }
 }
 
-// OpenAI model implementation using llm-connector
-pub struct OpenAIModel {
+/// Unified LLM model implementation using llm-connector
+///
+/// This single struct handles all LLM providers (OpenAI, Anthropic, Zhipu, Local)
+/// by wrapping llm-connector's unified client interface.
+pub struct LlmModel {
     client: LlmClient,
-    model: String,
+    config: ModelConfig,
 }
 
-impl OpenAIModel {
-    pub fn new(api_key: String, model: String) -> Self {
-        Self {
-            client: LlmClient::openai(&api_key),
-            model
+impl LlmModel {
+    /// Create a new LlmModel from configuration
+    pub fn from_config(config: ModelConfig) -> Result<Self, ModelError> {
+        let client = Self::create_client(&config)?;
+        Ok(Self { client, config })
+    }
+
+    /// Create llm-connector client based on provider
+    fn create_client(config: &ModelConfig) -> Result<LlmClient, ModelError> {
+        match &config.provider {
+            ModelProvider::OpenAI => {
+                let api_key = config.api_key.as_ref()
+                    .ok_or_else(|| ModelError::ConfigError("OpenAI API key required".into()))?;
+                Ok(LlmClient::openai(api_key))
+            }
+            ModelProvider::Anthropic => {
+                let api_key = config.api_key.as_ref()
+                    .ok_or_else(|| ModelError::ConfigError("Anthropic API key required".into()))?;
+                Ok(LlmClient::anthropic(api_key))
+            }
+            ModelProvider::Zhipu => {
+                let api_key = config.api_key.as_ref()
+                    .ok_or_else(|| ModelError::ConfigError("Zhipu API key required".into()))?;
+                // Zhipu uses OpenAI-compatible API
+                Ok(LlmClient::openai(api_key))
+            }
+            ModelProvider::Local(endpoint) => {
+                Ok(LlmClient::ollama_at(endpoint))
+            }
         }
     }
-}
 
-#[async_trait]
-impl LanguageModel for OpenAIModel {
-    async fn complete(&self, prompt: &str) -> Result<ModelResponse, ModelError> {
-        let request = ChatRequest {
-            model: format!("openai/{}", self.model),
-            messages: vec![LlmMessage::user(prompt)],
-            ..Default::default()
-        };
+    /// Format model name with provider prefix for llm-connector
+    fn format_model_name(&self) -> String {
+        match &self.config.provider {
+            ModelProvider::OpenAI => format!("openai/{}", self.config.model_name),
+            ModelProvider::Anthropic => format!("anthropic/{}", self.config.model_name),
+            ModelProvider::Zhipu => format!("zhipu/{}", self.config.model_name),
+            ModelProvider::Local(_) => self.config.model_name.clone(),
+        }
+    }
 
-        let response = self.client.chat(&request)
-            .await
-            .map_err(|e| ModelError::APIError(e.to_string()))?;
-
+    /// Convert llm-connector response to our ModelResponse
+    fn convert_response(response: llm_connector::ChatResponse) -> Result<ModelResponse, ModelError> {
         let content = response.choices.first()
             .map(|c| c.message.content.clone())
             .unwrap_or_default();
@@ -161,6 +193,23 @@ impl LanguageModel for OpenAIModel {
             usage,
             metadata: HashMap::new(),
         })
+    }
+}
+
+#[async_trait]
+impl LanguageModel for LlmModel {
+    async fn complete(&self, prompt: &str) -> Result<ModelResponse, ModelError> {
+        let request = ChatRequest {
+            model: self.format_model_name(),
+            messages: vec![LlmMessage::user(prompt)],
+            ..Default::default()
+        };
+
+        let response = self.client.chat(&request)
+            .await
+            .map_err(|e| ModelError::APIError(e.to_string()))?;
+
+        Self::convert_response(response)
     }
 
     async fn complete_with_tools(&self, prompt: &str, _tools: &[ToolDefinition]) -> Result<ModelResponse, ModelError> {
@@ -169,193 +218,15 @@ impl LanguageModel for OpenAIModel {
     }
 
     fn model_name(&self) -> &str {
-        &self.model
+        &self.config.model_name
     }
 
     fn supports_tools(&self) -> bool {
-        true
+        // Most modern LLMs support tools
+        matches!(
+            self.config.provider,
+            ModelProvider::OpenAI | ModelProvider::Anthropic | ModelProvider::Zhipu
+        )
     }
 }
 
-// Zhipu model implementation using llm-connector
-pub struct ZhipuModel {
-    client: LlmClient,
-    model: String,
-}
-
-impl ZhipuModel {
-    pub fn new(api_key: String, model: String, _endpoint: Option<String>) -> Self {
-        // Note: llm-connector 0.2.2 doesn't have a dedicated zhipu method
-        // Zhipu uses OpenAI-compatible API, so we use openai method with custom endpoint
-        Self {
-            client: LlmClient::openai(&api_key),
-            model
-        }
-    }
-}
-
-#[async_trait]
-impl LanguageModel for ZhipuModel {
-    async fn complete(&self, prompt: &str) -> Result<ModelResponse, ModelError> {
-        let request = ChatRequest {
-            model: format!("zhipu/{}", self.model),
-            messages: vec![LlmMessage::user(prompt)],
-            ..Default::default()
-        };
-
-        let response = self.client.chat(&request)
-            .await
-            .map_err(|e| ModelError::APIError(e.to_string()))?;
-
-        let content = response.choices.first()
-            .map(|c| c.message.content.clone())
-            .unwrap_or_default();
-
-        let usage = response.usage.map(|u| TokenUsage {
-            prompt_tokens: u.prompt_tokens,
-            completion_tokens: u.completion_tokens,
-            total_tokens: u.total_tokens,
-        });
-
-        Ok(ModelResponse {
-            content,
-            tool_calls: vec![],
-            usage,
-            metadata: HashMap::new(),
-        })
-    }
-
-    async fn complete_with_tools(&self, prompt: &str, _tools: &[ToolDefinition]) -> Result<ModelResponse, ModelError> {
-        // TODO: Implement tool calling support
-        self.complete(prompt).await
-    }
-
-    fn model_name(&self) -> &str {
-        &self.model
-    }
-
-    fn supports_tools(&self) -> bool {
-        true
-    }
-}
-
-// Anthropic model implementation using llm-connector
-pub struct AnthropicModel {
-    client: LlmClient,
-    model: String,
-}
-
-impl AnthropicModel {
-    pub fn new(api_key: String, model: String) -> Self {
-        Self {
-            client: LlmClient::anthropic(&api_key),
-            model
-        }
-    }
-}
-
-#[async_trait]
-impl LanguageModel for AnthropicModel {
-    async fn complete(&self, prompt: &str) -> Result<ModelResponse, ModelError> {
-        let request = ChatRequest {
-            model: format!("anthropic/{}", self.model),
-            messages: vec![LlmMessage::user(prompt)],
-            ..Default::default()
-        };
-
-        let response = self.client.chat(&request)
-            .await
-            .map_err(|e| ModelError::APIError(e.to_string()))?;
-
-        let content = response.choices.first()
-            .map(|c| c.message.content.clone())
-            .unwrap_or_default();
-
-        let usage = response.usage.map(|u| TokenUsage {
-            prompt_tokens: u.prompt_tokens,
-            completion_tokens: u.completion_tokens,
-            total_tokens: u.total_tokens,
-        });
-
-        Ok(ModelResponse {
-            content,
-            tool_calls: vec![],
-            usage,
-            metadata: HashMap::new(),
-        })
-    }
-
-    async fn complete_with_tools(&self, prompt: &str, _tools: &[ToolDefinition]) -> Result<ModelResponse, ModelError> {
-        // TODO: Implement tool calling support
-        self.complete(prompt).await
-    }
-
-    fn model_name(&self) -> &str {
-        &self.model
-    }
-
-    fn supports_tools(&self) -> bool {
-        true
-    }
-}
-
-// Local model implementation using llm-connector
-pub struct LocalModel {
-    client: LlmClient,
-    model: String,
-}
-
-impl LocalModel {
-    pub fn new(endpoint: String, model: String) -> Self {
-        // Use ollama_at for custom local endpoints
-        Self {
-            client: LlmClient::ollama_at(&endpoint),
-            model
-        }
-    }
-}
-
-#[async_trait]
-impl LanguageModel for LocalModel {
-    async fn complete(&self, prompt: &str) -> Result<ModelResponse, ModelError> {
-        let request = ChatRequest {
-            model: self.model.clone(),
-            messages: vec![LlmMessage::user(prompt)],
-            ..Default::default()
-        };
-
-        let response = self.client.chat(&request)
-            .await
-            .map_err(|e| ModelError::APIError(e.to_string()))?;
-
-        let content = response.choices.first()
-            .map(|c| c.message.content.clone())
-            .unwrap_or_default();
-
-        let usage = response.usage.map(|u| TokenUsage {
-            prompt_tokens: u.prompt_tokens,
-            completion_tokens: u.completion_tokens,
-            total_tokens: u.total_tokens,
-        });
-
-        Ok(ModelResponse {
-            content,
-            tool_calls: vec![],
-            usage,
-            metadata: HashMap::new(),
-        })
-    }
-
-    async fn complete_with_tools(&self, prompt: &str, _tools: &[ToolDefinition]) -> Result<ModelResponse, ModelError> {
-        // Local models typically don't support tool calling
-        self.complete(prompt).await
-    }
-
-    fn model_name(&self) -> &str {
-        &self.model
-    }
-
-    fn supports_tools(&self) -> bool {
-        false
-    }
-}

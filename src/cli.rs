@@ -3,7 +3,6 @@
 use clap::{Parser, Subcommand};
 use std::io::{self, Write};
 use crate::config::AgentConfig;
-use crate::models::LanguageModel;
 
 #[derive(Parser)]
 #[command(name = "ai-agent")]
@@ -250,27 +249,9 @@ impl Cli {
 
 /// Create an agent with the given configuration
 async fn create_agent(config: &AgentConfig) -> anyhow::Result<crate::agent::TaskAgent> {
-    // Create model based on provider
-    let model: Box<dyn LanguageModel> = match &config.model.provider {
-        crate::config::ModelProvider::OpenAI => {
-            let api_key = config.model.api_key.clone()
-                .ok_or_else(|| anyhow::anyhow!("OpenAI API key not found"))?;
-            Box::new(crate::models::OpenAIModel::new(api_key, config.model.model_name.clone()))
-        }
-        crate::config::ModelProvider::Anthropic => {
-            let api_key = config.model.api_key.clone()
-                .ok_or_else(|| anyhow::anyhow!("Anthropic API key not found"))?;
-            Box::new(crate::models::AnthropicModel::new(api_key, config.model.model_name.clone()))
-        }
-        crate::config::ModelProvider::Zhipu => {
-            let api_key = config.model.api_key.clone()
-                .ok_or_else(|| anyhow::anyhow!("Zhipu API key not found"))?;
-            Box::new(crate::models::ZhipuModel::new(api_key, config.model.model_name.clone(), config.model.endpoint.clone()))
-        }
-        crate::config::ModelProvider::Local(ref endpoint) => {
-            Box::new(crate::models::LocalModel::new(endpoint.clone(), config.model.model_name.clone()))
-        }
-    };
+    // Create unified model from configuration
+    let model = Box::new(crate::models::LlmModel::from_config(config.model.clone())
+        .map_err(|e| anyhow::anyhow!("Failed to create model: {}", e))?);
 
     let agent = crate::agent::TaskAgent::new(model, config.clone());
 

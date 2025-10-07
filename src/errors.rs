@@ -33,6 +33,9 @@ pub enum ModelError {
     #[error("Authentication error: {0}")]
     AuthenticationError(String),
 
+    #[error("Configuration error: {0}")]
+    ConfigError(String),
+
     #[error("Rate limited")]
     RateLimited,
 

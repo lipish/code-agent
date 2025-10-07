@@ -11,7 +11,7 @@ use tracing::info;
 
 use crate::agent::TaskAgent;
 use crate::config::AgentConfig;
-use crate::models::{LanguageModel, ZhipuModel};
+use crate::models::{LanguageModel, LlmModel};
 use crate::service::types::{
     self as service_types,
     TaskRequest, TaskResponse, TaskStatus, TaskPlan, TaskMetrics, TaskComplexity,
@@ -528,19 +528,9 @@ impl CodeAgentService {
 
 /// Create model from configuration
 fn create_model_from_config(config: &AgentConfig) -> Result<Box<dyn LanguageModel>, ServiceErrorType> {
-    match &config.model.provider {
-        crate::config::ModelProvider::Zhipu => {
-            let api_key = config.model.api_key.clone()
-                .ok_or_else(|| ServiceErrorType::ConfigurationError("Zhipu API key not found".to_string()))?;
-            Ok(Box::new(ZhipuModel::new(
-                api_key,
-                config.model.model_name.clone(),
-                config.model.endpoint.clone(),
-            )))
-        }
-        // TODO: Implement other model providers
-        _ => Err(ServiceErrorType::ConfigurationError("Unsupported model provider".to_string())),
-    }
+    LlmModel::from_config(config.model.clone())
+        .map(|m| Box::new(m) as Box<dyn LanguageModel>)
+        .map_err(|e| ServiceErrorType::ConfigurationError(format!("Failed to create model: {}", e)))
 }
 
 /// Register basic tools with the agent
