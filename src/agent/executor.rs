@@ -4,7 +4,7 @@
 //! and planning phases.
 
 use crate::errors::AgentError;
-use crate::text_parser;
+use crate::parser;
 use crate::execution::{read_file, list_files, run_command};
 use crate::types::ExecutionResult;
 
@@ -69,7 +69,7 @@ impl TaskExecutor {
 
     /// Execute file reading operation
     async fn execute_read_file(&self, task_understanding: &str) -> Result<ExecutionResult, AgentError> {
-        if let Some(file_path) = text_parser::extract_file_path(task_understanding) {
+        if let Some(file_path) = parser::extract_file_path(task_understanding) {
             match read_file(&file_path).await {
                 Ok(content) => {
                     Ok(ExecutionResult {
@@ -100,7 +100,7 @@ impl TaskExecutor {
 
     /// Execute file listing operation
     async fn execute_list_files(&self, task_understanding: &str) -> Result<ExecutionResult, AgentError> {
-        let path = text_parser::extract_directory_path(task_understanding)
+        let path = parser::extract_directory_path(task_understanding)
             .unwrap_or_else(|| ".".to_string());
 
         match list_files(&path).await {
@@ -125,7 +125,7 @@ impl TaskExecutor {
 
     /// Execute command running operation
     async fn execute_run_command(&self, task_understanding: &str) -> Result<ExecutionResult, AgentError> {
-        if let Some(command) = text_parser::extract_command(task_understanding) {
+        if let Some(command) = parser::extract_command(task_understanding) {
             match run_command(&command).await {
                 Ok(output) => {
                     Ok(ExecutionResult {

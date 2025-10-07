@@ -11,7 +11,7 @@
 //! # Examples
 //!
 //! ```
-//! use task_runner::text_parser::extract_file_path;
+//! use task_runner::parser::extract_file_path;
 //!
 //! let text = "Read the file config.toml";
 //! assert_eq!(extract_file_path(text), Some("config.toml".to_string()));
@@ -46,7 +46,7 @@ const COMMAND_KEYWORDS: &[&str] = &[
 /// # Examples
 ///
 /// ```
-/// use task_runner::text_parser::extract_file_path;
+/// use task_runner::parser::extract_file_path;
 ///
 /// let text = "Read the file config.toml";
 /// assert_eq!(extract_file_path(text), Some("config.toml".to_string()));
@@ -86,7 +86,7 @@ fn has_file_extension(word: &str) -> bool {
 /// # Examples
 ///
 /// ```
-/// use task_runner::text_parser::extract_command;
+/// use task_runner::parser::extract_command;
 ///
 /// let text = "Run the command echo 'hello'";
 /// assert_eq!(extract_command(text), Some("echo 'hello'".to_string()));
