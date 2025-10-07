@@ -261,10 +261,11 @@ pub const SAFETY: &[&str] = &[
 // ============================================================================
 
 /// Available agent types
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AgentType {
     /// Generic agent - adapts to any task (default)
     /// The returned content depends entirely on your prompt
+    #[default]
     Generic,
     /// Code development agent
     Code,
@@ -297,21 +298,6 @@ impl AgentType {
         }
     }
 
-    /// Get agent type from string
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s.to_lowercase().as_str() {
-            "generic" | "general" | "default" => Some(AgentType::Generic),
-            "code" => Some(AgentType::Code),
-            "data" => Some(AgentType::Data),
-            "devops" => Some(AgentType::DevOps),
-            "api" => Some(AgentType::Api),
-            "testing" => Some(AgentType::Testing),
-            "documentation" | "docs" => Some(AgentType::Documentation),
-            "security" => Some(AgentType::Security),
-            _ => None,
-        }
-    }
-
     /// Get all available agent types
     pub fn all() -> &'static [AgentType] {
         &[
@@ -327,9 +313,22 @@ impl AgentType {
     }
 }
 
-impl Default for AgentType {
-    fn default() -> Self {
-        AgentType::Generic
+/// Implement FromStr trait for AgentType
+impl std::str::FromStr for AgentType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "generic" | "general" | "default" => Ok(AgentType::Generic),
+            "code" => Ok(AgentType::Code),
+            "data" => Ok(AgentType::Data),
+            "devops" => Ok(AgentType::DevOps),
+            "api" => Ok(AgentType::Api),
+            "testing" => Ok(AgentType::Testing),
+            "documentation" | "docs" => Ok(AgentType::Documentation),
+            "security" => Ok(AgentType::Security),
+            _ => Err(format!("Invalid agent type: '{}'. Valid types are: generic, code, data, devops, api, testing, documentation, security", s)),
+        }
     }
 }
 
@@ -466,18 +465,25 @@ mod tests {
 
     #[test]
     fn test_agent_type_from_str() {
-        assert_eq!(AgentType::from_str("generic"), Some(AgentType::Generic));
-        assert_eq!(AgentType::from_str("general"), Some(AgentType::Generic));
-        assert_eq!(AgentType::from_str("default"), Some(AgentType::Generic));
-        assert_eq!(AgentType::from_str("code"), Some(AgentType::Code));
-        assert_eq!(AgentType::from_str("data"), Some(AgentType::Data));
-        assert_eq!(AgentType::from_str("devops"), Some(AgentType::DevOps));
-        assert_eq!(AgentType::from_str("api"), Some(AgentType::Api));
-        assert_eq!(AgentType::from_str("testing"), Some(AgentType::Testing));
-        assert_eq!(AgentType::from_str("documentation"), Some(AgentType::Documentation));
-        assert_eq!(AgentType::from_str("docs"), Some(AgentType::Documentation));
-        assert_eq!(AgentType::from_str("security"), Some(AgentType::Security));
-        assert_eq!(AgentType::from_str("unknown"), None);
+        use std::str::FromStr;
+
+        assert_eq!(AgentType::from_str("generic"), Ok(AgentType::Generic));
+        assert_eq!(AgentType::from_str("general"), Ok(AgentType::Generic));
+        assert_eq!(AgentType::from_str("default"), Ok(AgentType::Generic));
+        assert_eq!(AgentType::from_str("code"), Ok(AgentType::Code));
+        assert_eq!(AgentType::from_str("data"), Ok(AgentType::Data));
+        assert_eq!(AgentType::from_str("devops"), Ok(AgentType::DevOps));
+        assert_eq!(AgentType::from_str("api"), Ok(AgentType::Api));
+        assert_eq!(AgentType::from_str("testing"), Ok(AgentType::Testing));
+        assert_eq!(AgentType::from_str("documentation"), Ok(AgentType::Documentation));
+        assert_eq!(AgentType::from_str("docs"), Ok(AgentType::Documentation));
+        assert_eq!(AgentType::from_str("security"), Ok(AgentType::Security));
+        assert!(AgentType::from_str("unknown").is_err());
+
+        // Test error message
+        let err = AgentType::from_str("invalid").unwrap_err();
+        assert!(err.contains("Invalid agent type"));
+        assert!(err.contains("invalid"));
     }
 
     #[test]
