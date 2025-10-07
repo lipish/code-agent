@@ -26,7 +26,7 @@ pub mod execution;      // Execution operations (file, command)
 pub mod planning;       // Task planning and analysis (formerly understanding)
 
 // Helper modules
-pub mod task_helpers;   // Task helper functions
+pub mod text_parser;   // Task helper functions
 
 // Service modules (optional, enabled with "service" feature)
 #[cfg(feature = "service")]

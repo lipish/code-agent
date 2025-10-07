@@ -4,7 +4,8 @@
 //! and planning phases.
 
 use crate::errors::AgentError;
-use crate::task_helpers;
+use crate::text_parser;
+use crate::execution::{read_file, list_files, run_command};
 use crate::types::ExecutionResult;
 
 /// Task Executor
@@ -68,8 +69,8 @@ impl TaskExecutor {
 
     /// Execute file reading operation
     async fn execute_read_file(&self, task_understanding: &str) -> Result<ExecutionResult, AgentError> {
-        if let Some(file_path) = task_helpers::extract_file_path(task_understanding) {
-            match task_helpers::read_file(&file_path).await {
+        if let Some(file_path) = text_parser::extract_file_path(task_understanding) {
+            match read_file(&file_path).await {
                 Ok(content) => {
                     Ok(ExecutionResult {
                         success: true,
@@ -99,10 +100,10 @@ impl TaskExecutor {
 
     /// Execute file listing operation
     async fn execute_list_files(&self, task_understanding: &str) -> Result<ExecutionResult, AgentError> {
-        let path = task_helpers::extract_directory_path(task_understanding)
+        let path = text_parser::extract_directory_path(task_understanding)
             .unwrap_or_else(|| ".".to_string());
-        
-        match task_helpers::list_files(&path).await {
+
+        match list_files(&path).await {
             Ok(files) => {
                 Ok(ExecutionResult {
                     success: true,
@@ -124,12 +125,12 @@ impl TaskExecutor {
 
     /// Execute command running operation
     async fn execute_run_command(&self, task_understanding: &str) -> Result<ExecutionResult, AgentError> {
-        if let Some(command) = task_helpers::extract_command(task_understanding) {
-            match task_helpers::run_command(&command).await {
+        if let Some(command) = text_parser::extract_command(task_understanding) {
+            match run_command(&command).await {
                 Ok(output) => {
                     Ok(ExecutionResult {
                         success: true,
-                        summary: format!("Successfully ran command: {}", command),
+                        summary: format!("Command executed: {}", command),
                         details: output,
                         execution_time: 3,
                     })

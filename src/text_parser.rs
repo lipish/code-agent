@@ -1,9 +1,21 @@
-//! Task Helper Functions
+//! Text Parsing Utilities
 //!
-//! This module contains utility functions for task execution,
-//! including file operations, command execution, and text parsing.
-
-use crate::errors::{AgentError, ToolError};
+//! This module provides functions to extract structured information from natural language text.
+//!
+//! # Features
+//!
+//! - Extract file paths from text
+//! - Extract shell commands from text
+//! - Extract directory paths from text
+//!
+//! # Examples
+//!
+//! ```
+//! use task_runner::text_parser::extract_file_path;
+//!
+//! let text = "Read the file config.toml";
+//! assert_eq!(extract_file_path(text), Some("config.toml".to_string()));
+//! ```
 
 /// Supported file extensions for file path extraction
 const SUPPORTED_FILE_EXTENSIONS: &[&str] = &[
@@ -34,7 +46,7 @@ const COMMAND_KEYWORDS: &[&str] = &[
 /// # Examples
 ///
 /// ```
-/// use task_runner::task_helpers::extract_file_path;
+/// use task_runner::text_parser::extract_file_path;
 ///
 /// let text = "Read the file config.toml";
 /// assert_eq!(extract_file_path(text), Some("config.toml".to_string()));
@@ -74,7 +86,7 @@ fn has_file_extension(word: &str) -> bool {
 /// # Examples
 ///
 /// ```
-/// use task_runner::task_helpers::extract_command;
+/// use task_runner::text_parser::extract_command;
 ///
 /// let text = "Run the command echo 'hello'";
 /// assert_eq!(extract_command(text), Some("echo 'hello'".to_string()));
@@ -112,87 +124,10 @@ pub fn extract_command(text: &str) -> Option<String> {
     None
 }
 
-/// Read a file asynchronously
-///
-/// # Arguments
-///
-/// * `path` - The path to the file to read
-///
-/// # Returns
-///
-/// The file contents as a string, or an error if the file cannot be read.
-pub async fn read_file(path: &str) -> Result<String, AgentError> {
-    let content = tokio::fs::read_to_string(path)
-        .await
-        .map_err(|e| AgentError::ToolError(ToolError::ExecutionError(
-            format!("Failed to read file '{}': {}", path, e)
-        )))?;
-    Ok(content)
-}
-
-/// List files in a directory asynchronously
-///
-/// # Arguments
-///
-/// * `path` - The directory path to list
-///
-/// # Returns
-///
-/// A formatted string listing all files and directories, or an error.
-pub async fn list_files(path: &str) -> Result<String, AgentError> {
-    let mut entries = tokio::fs::read_dir(path)
-        .await
-        .map_err(|e| AgentError::ToolError(ToolError::ExecutionError(
-            format!("Failed to read directory '{}': {}", path, e)
-        )))?;
-
-    let mut files = Vec::new();
-    while let Some(entry) = entries.next_entry().await
-        .map_err(|e| AgentError::ToolError(ToolError::ExecutionError(e.to_string())))? {
-        let name = entry.file_name().to_string_lossy().to_string();
-        let metadata = entry.metadata().await
-            .map_err(|e| AgentError::ToolError(ToolError::ExecutionError(e.to_string())))?;
-        let file_type = if metadata.is_dir() { "DIR" } else { "FILE" };
-        files.push(format!("{}: {}", file_type, name));
-    }
-
-    files.sort();
-    Ok(files.join("\n"))
-}
-
-/// Run a shell command asynchronously
-///
-/// # Arguments
-///
-/// * `command` - The shell command to execute
-///
-/// # Returns
-///
-/// The command output (stdout), or an error if the command fails.
-///
-/// # Security
-///
-/// This function executes arbitrary shell commands. Ensure proper validation
-/// and sanitization of user input before calling this function.
-pub async fn run_command(command: &str) -> Result<String, AgentError> {
-    let output = tokio::process::Command::new("sh")
-        .arg("-c")
-        .arg(command)
-        .output()
-        .await
-        .map_err(|e| AgentError::ToolError(ToolError::ExecutionError(
-            format!("Failed to execute command '{}': {}", command, e)
-        )))?;
-
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(AgentError::ToolError(ToolError::ExecutionError(
-            format!("Command '{}' failed: {}", command, stderr)
-        )))
-    }
-}
+// Note: File and command operations have been moved to:
+// - src/execution/file_ops.rs for file operations
+// - src/execution/command_ops.rs for command execution
+// This module now focuses solely on text parsing.
 
 /// Extract directory path from text
 ///
@@ -278,30 +213,8 @@ mod tests {
         assert!(!has_file_extension("noextension"));
     }
 
-    #[tokio::test]
-    async fn test_read_file() {
-        // Test reading Cargo.toml (should exist in project root)
-        let result = read_file("Cargo.toml").await;
-        assert!(result.is_ok());
-        assert!(result.unwrap().contains("task-runner"));
-    }
-
-    #[tokio::test]
-    async fn test_list_files() {
-        // Test listing src directory
-        let result = list_files("src").await;
-        assert!(result.is_ok());
-        let files = result.unwrap();
-        // Check for lib.rs which should always exist
-        assert!(files.contains("lib.rs") || files.contains("FILE: lib.rs"));
-    }
-
-    #[tokio::test]
-    async fn test_run_command() {
-        // Test simple echo command
-        let result = run_command("echo 'test'").await;
-        assert!(result.is_ok());
-        assert!(result.unwrap().contains("test"));
-    }
+    // Note: Tests for file and command operations have been moved to:
+    // - src/execution/file_ops.rs
+    // - src/execution/command_ops.rs
 }
 
