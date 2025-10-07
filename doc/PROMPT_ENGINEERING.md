@@ -122,11 +122,24 @@ engine.load_template("prompts/custom-template.yaml")?;
 let plan = engine.analyze_task("实现新功能").await?;
 ```
 
-## 内置场景
+## 场景系统
 
-Task Runner 提供了多个预定义场景：
+### 当前状态
 
-### 通用场景
+**核心功能** ✅:
+- PromptTemplate 支持场景定义
+- PromptBuilder 支持场景选择
+- YAML 文件可以定义自定义场景
+
+**内置场景** 🚧:
+- 默认模板中 scenarios 为空
+- 需要通过 YAML 文件或代码添加场景
+
+### 推荐的场景类型
+
+以下是建议的场景类型，可以在自定义 YAML 中定义：
+
+#### 通用场景
 
 1. **code_generation** - 代码生成
    - 新功能实现
@@ -173,9 +186,9 @@ Task Runner 提供了多个预定义场景：
    - 进程管理
    - 输出处理
 
-### Rust 特定场景
+#### Rust 特定场景
 
-（在 `prompts/rust-project.yaml` 中）
+可以在自定义 YAML 中添加：
 
 1. **async_programming** - 异步编程
 2. **error_handling** - 错误处理
@@ -374,13 +387,43 @@ let rust_engine = PlanningEngine::with_template(model.clone(), rust_template);
 let python_engine = PlanningEngine::with_template(model.clone(), python_template);
 ```
 
+## 当前实现状态
+
+### ✅ 已完全实现
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| **三层结构** | ✅ | Global + Project + Scenario |
+| **PromptTemplate** | ✅ | 完整的模板系统 |
+| **PromptBuilder** | ✅ | 流式 API 构建器 |
+| **YAML 支持** | ✅ | 加载/保存功能 |
+| **PlanningEngine 集成** | ✅ | with_template, load_template |
+| **链式调用** | ✅ | task_type().context().build() |
+| **Few-shot 示例** | ✅ | PromptExample 支持 |
+| **类型安全** | ✅ | Rust 类型系统 |
+
+### 🚧 需要手动配置
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| **内置场景** | 🚧 | 需要在 YAML 中定义 |
+| **示例文件** | 🚧 | 需要创建 prompts/*.yaml |
+| **自动推断** | 🚧 | PlanningEngine 有推断但未用 PromptBuilder |
+
+### 💡 使用建议
+
+1. **创建自定义 YAML 模板** - 定义你的场景和规则
+2. **使用 PromptBuilder** - 灵活构建提示词
+3. **参考数据结构** - 查看 `src/prompts.rs` 了解详细结构
+4. **贡献示例** - 欢迎提交示例 YAML 文件
+
 ## 与 Codex/Roo-Code 对比
 
 | 特性 | Task Runner | Codex | Roo-Code |
 |------|-------------|-------|----------|
 | 分层结构 | ✅ 三层 | ✅ 多层 | ✅ 三层 |
 | 外置配置 | ✅ YAML | ✅ 多格式 | ✅ JSON |
-| 场景支持 | ✅ 9+ 场景 | ✅ 丰富 | ✅ 可扩展 |
+| 场景支持 | 🚧 自定义 | ✅ 丰富 | ✅ 可扩展 |
 | 类型安全 | ✅ Rust | ❌ Python | ❌ TypeScript |
 | 动态加载 | ✅ 支持 | ✅ 支持 | ✅ 支持 |
 | 示例支持 | ✅ Few-shot | ✅ Few-shot | ✅ Few-shot |
