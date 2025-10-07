@@ -62,6 +62,7 @@ mockall = "0.12"
 # Metrics and monitoring (optional, for service feature)
 metrics = { version = "0.23", optional = true }
 metrics-exporter-prometheus = { version = "0.13", optional = true }
+dashmap = "6.1.0"
 
 [features]
 default = ["core"]
