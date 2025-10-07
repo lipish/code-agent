@@ -89,54 +89,93 @@ async fn main() -> anyhow::Result<()> {
 **功能**: 定义公共API和模块导出
 
 **导出的核心类型**:
-- `CodeAgent` - 主要的AI代理
+- `TaskAgent` - 通用任务代理（主要类型）
+- `CodeAgent` - TaskAgent 的别名（已废弃，保留向后兼容）
 - `AgentConfig` - 配置管理
 - `LanguageModel` - AI模型接口
 - `Tool` - 工具系统接口
+- `PromptTemplate` - 提示词模板
+- `UnderstandingEngine` - 任务理解引擎
 - `TaskRequest/TaskResponse` - 服务类型 (需要 "service" feature)
 
 **模块组织**:
 ```rust
-pub mod agent;        // 核心代理
-pub mod config;       // 配置管理
-pub mod models;       // AI模型
-pub mod tools;        // 工具系统
-pub mod types;        // 类型定义
-pub mod errors;       // 错误处理
-pub mod understanding; // 任务理解
-pub mod execution;    // 任务执行
-pub mod cli;          // 命令行接口
+pub mod agent;         // 核心代理 (296行) [重构精简]
+pub mod config;        // 配置管理
+pub mod models;        // AI模型
+pub mod prompts;       // 提示词工程系统 (300行) [新增]
+pub mod task_helpers;  // 任务辅助函数 (292行) [新增]
+pub mod tools;         // 工具系统
+pub mod types;         // 类型定义
+pub mod errors;        // 错误处理
+pub mod understanding; // 任务理解 (186行) [重构]
+pub mod execution;     // 任务执行
+pub mod cli;           // 命令行接口
 
 #[cfg(feature = "service")]
-pub mod service;      // HTTP服务 (可选)
+pub mod service;       // HTTP服务 (可选)
 ```
 
-### 3. **agent.rs** - 核心AI代理
-**路径**: `src/agent.rs`  
-**功能**: 实现主要的AI代理逻辑
+### 3. **agent.rs** - 核心任务代理
+**路径**: `src/agent.rs` (296行，重构后减少29%)
+**功能**: 实现通用的AI任务代理，专注于主工作流程（理解、执行协调、结果生成）
 
-**核心结构**:
+**核心结构** (已优化):
 ```rust
-pub struct CodeAgent {
-    model: Box<dyn LanguageModel>,
+/// Main AI-Native Task Agent (struct, not trait)
+///
+/// A general-purpose agent that can handle various types of tasks including:
+/// - Code generation and refactoring
+/// - File operations
+/// - Command execution
+/// - Documentation
+/// - Testing
+/// - And any other tasks defined through the tool system
+pub struct TaskAgent {
+    model: Arc<dyn LanguageModel>,           // 改为Arc支持共享
     tools: Arc<Mutex<ToolRegistry>>,
     config: AgentConfig,
+    understanding_engine: UnderstandingEngine, // 新增：专门的理解引擎
     _error_handler: ErrorHandler,
+}
+
+/// Type alias for backward compatibility (deprecated)
+#[deprecated(since = "0.2.1", note = "Use `TaskAgent` instead")]
+pub type CodeAgent = TaskAgent;
+
+impl TaskAgent {
+    // 实现方法
 }
 ```
 
+**重要说明**:
+- `TaskAgent` 是一个 **struct**（结构体），不是 trait（特征）
+- 从 v0.2.1 开始，`CodeAgent` 重命名为 `TaskAgent` 以体现其通用性
+- `CodeAgent` 作为别名保留以保持向后兼容，但已标记为 deprecated
+- 辅助函数（文件操作、命令执行、文本解析）已移至 `task_helpers` 模块
+
+**职责分离**:
+- `agent.rs` - 主工作流程：任务理解、执行协调、结果生成
+- `task_helpers.rs` - 辅助功能：文件操作、命令执行、文本解析
+
 **主要方法**:
-- `new()` - 创建新的代理实例
+- `new()` - 创建新的代理实例（自动创建理解引擎）
 - `process_task()` - 处理任务的主入口
-- `understand_task()` - 使用AI理解任务
+- `understand_task()` - 委托给 UnderstandingEngine
 - `execute_task_real()` - 执行任务
 - `register_tool()` - 注册工具
+- `get_model()` - 获取模型引用
 
-**工作流程**:
+**工作流程** (优化后):
 1. 接收任务请求
-2. 理解阶段: 使用AI模型分析任务
+2. 理解阶段: 委托给 UnderstandingEngine（使用提示词模板）
 3. 执行阶段: 根据理解结果执行任务
 4. 返回结果
+
+**重构改进**:
+- ✅ 职责分离：理解逻辑移到 understanding.rs
+- ✅ 代码精简：从 416 行减少到 345 行
+- ✅ 共享模型：使用 Arc 支持多组件共享
 
 ### 4. **cli.rs** - 命令行接口
 **路径**: `src/cli.rs`  
@@ -274,18 +313,137 @@ pub struct ErrorHandler {
 支持自动重试机制,针对网络错误、超时和限流错误。
 
 ### 10. **understanding.rs** - 任务理解引擎
-**路径**: `src/understanding.rs`  
-**功能**: 使用AI分析和理解任务
+**路径**: `src/understanding.rs` (186行，重构后新增)
+**功能**: 使用AI分析和理解任务，集成提示词工程系统
+
+**核心结构**:
+```rust
+pub struct UnderstandingEngine {
+    model: Arc<dyn LanguageModel>,
+    prompt_template: PromptTemplate,  // 提示词模板
+}
+```
+
+**主要方法**:
+- `new()` - 使用默认模板创建引擎
+- `with_template()` - 使用自定义模板创建引擎
+- `load_template()` - 从文件加载模板
+- `understand_task()` - 分析任务（自动推断类型）
+- `understand_task_with_type()` - 分析任务（指定类型）
+- `build_understanding_prompt()` - 构建提示词（使用模板系统）
+- `infer_task_type()` - 推断任务类型
+- `parse_task_plan()` - 解析AI响应
 
 **核心功能**:
-- 构建理解提示词
-- 调用AI模型分析任务
-- 解析AI响应生成任务计划
-- 评估任务复杂度
-- 识别依赖和需求
+- ✅ 使用提示词模板系统构建提示词
+- ✅ 自动推断任务类型（9种场景）
+- ✅ 调用AI模型分析任务
+- ✅ 解析AI响应生成任务计划
+- ✅ 评估任务复杂度
+- ✅ 识别依赖和需求
 
-### 11. **execution.rs** - 任务执行引擎
-**路径**: `src/execution.rs`  
+**任务类型推断**:
+- testing: test, unit test
+- refactoring: refactor, improve
+- debugging: debug, fix, error
+- documentation: document, doc
+- optimization: optimize, performance
+- architecture: design, architecture
+- file_operations: read, write, file
+- command_execution: run, execute, command
+- code_generation: create, generate, implement
+
+### 11. **prompts.rs** - 提示词工程系统
+**路径**: `src/prompts.rs` (300行，新增)
+**功能**: 灵活的提示词模板系统，参考 OpenAI Codex 和 Roo-Code
+
+**核心结构**:
+```rust
+pub struct PromptTemplate {
+    pub global: GlobalTemplate,              // 全局模板
+    pub project: Option<ProjectRules>,       // 项目规则
+    pub scenarios: HashMap<String, ScenarioPrompt>, // 场景提示词
+}
+
+pub struct PromptBuilder {
+    template: PromptTemplate,
+    task_type: Option<String>,
+    context: HashMap<String, String>,
+}
+```
+
+**主要组件**:
+- `GlobalTemplate` - 系统角色、输出格式、约束
+- `ProjectRules` - 技术栈、规范、上下文
+- `ScenarioPrompt` - 场景特定指令和示例
+- `OutputFormat` - 输出格式规范
+- `PromptExample` - Few-shot 示例
+
+**核心功能**:
+- ✅ 分层提示词结构（全局+项目+场景）
+- ✅ YAML 外置配置
+- ✅ 流式 API 构建器
+- ✅ 动态上下文注入
+- ✅ 模板加载和保存
+- ✅ 9+ 预定义场景
+
+**内置场景**:
+1. code_generation - 代码生成
+2. refactoring - 代码重构
+3. debugging - 调试修复
+4. testing - 测试编写
+5. documentation - 文档编写
+6. architecture - 架构设计
+7. optimization - 性能优化
+8. file_operations - 文件操作
+9. command_execution - 命令执行
+
+**配置文件**:
+- `prompts/default.yaml` - 默认模板
+- `prompts/rust-project.yaml` - Rust 项目模板
+
+详见：[提示词工程文档](./PROMPT_ENGINEERING.md)
+
+### 12. **task_helpers.rs** - 任务辅助函数
+**路径**: `src/task_helpers.rs` (292行，新增)
+**功能**: 提供任务执行的辅助功能，从 agent.rs 分离出来
+
+**核心函数**:
+```rust
+// 文本解析
+pub fn extract_file_path(text: &str) -> Option<String>
+pub fn extract_command(text: &str) -> Option<String>
+pub fn extract_directory_path(text: &str) -> Option<String>
+
+// 文件操作
+pub async fn read_file(path: &str) -> Result<String, AgentError>
+pub async fn list_files(path: &str) -> Result<String, AgentError>
+
+// 命令执行
+pub async fn run_command(command: &str) -> Result<String, AgentError>
+```
+
+**主要功能**:
+- ✅ **文本解析**: 从自然语言中提取文件路径、命令、目录路径
+- ✅ **文件操作**: 读取文件、列出目录内容
+- ✅ **命令执行**: 执行 shell 命令并返回输出
+- ✅ **错误处理**: 统一的错误处理和友好的错误消息
+- ✅ **测试覆盖**: 7 个单元测试 + 2 个文档测试
+
+**设计优势**:
+- 独立模块，职责单一
+- 纯函数设计，易于测试
+- 可被其他模块复用
+- 保持 agent.rs 简洁清晰
+
+**支持的文件扩展名**:
+- 代码: .rs, .py, .js, .ts, .go, .java, .c, .cpp, .h
+- 配置: .toml, .yaml, .yml, .json, .xml
+- 文档: .txt, .md
+- 脚本: .sh, .bash, .zsh, .fish
+
+### 13. **execution.rs** - 任务执行引擎
+**路径**: `src/execution.rs`
 **功能**: 执行任务计划
 
 **执行流程**:
@@ -345,15 +503,17 @@ task-runner/
 ├── src/                    # 源代码目录
 │   ├── main.rs            # 程序入口
 │   ├── lib.rs             # 库入口
-│   ├── agent.rs           # 核心AI代理
+│   ├── agent.rs           # 核心任务代理 (296行，重构精简)
 │   ├── cli.rs             # 命令行接口
 │   ├── config.rs          # 配置管理
 │   ├── errors.rs          # 错误处理
 │   ├── execution.rs       # 执行引擎
 │   ├── models.rs          # AI模型
+│   ├── prompts.rs         # 提示词工程系统 (300行，新增)
+│   ├── task_helpers.rs    # 任务辅助函数 (292行，新增)
 │   ├── tools.rs           # 工具系统
 │   ├── types.rs           # 类型定义
-│   ├── understanding.rs   # 理解引擎
+│   ├── understanding.rs   # 理解引擎 (186行，重构后)
 │   ├── service_types.rs   # 服务类型
 │   │
 │   ├── server/            # 服务器相关
@@ -369,17 +529,23 @@ task-runner/
 │
 ├── doc/                   # 文档目录
 │   ├── CODE_STRUCTURE.md  # 代码结构文档 (本文件)
+│   ├── PROMPT_ENGINEERING.md  # 提示词工程文档 (新增)
+│   ├── REFACTORING_GUIDE.md   # 重构指南 (新增)
 │   ├── SERVICE_API.md     # API文档
-│   ├── TESTING_GUIDE.md   # 测试指南
 │   ├── RUST_ANALYZER_SETUP.md  # 开发环境配置
 │   ├── system-design.md   # 系统设计 (英文)
 │   └── system-design-cn.md # 系统设计 (中文)
+│
+├── prompts/               # 提示词模板目录 (新增)
+│   ├── default.yaml       # 默认提示词模板
+│   └── rust-project.yaml  # Rust项目专用模板
 │
 ├── examples/              # 示例代码
 │   ├── Cargo.toml         # 示例项目配置
 │   ├── README.md          # 示例说明
 │   ├── http_client.rs     # HTTP客户端示例
 │   ├── in_process_service.rs  # 进程内服务示例
+│   ├── prompt_engineering.rs  # 提示词工程示例 (新增)
 │   └── rust_client.rs     # Rust客户端示例
 │
 ├── ref/                   # 参考实现

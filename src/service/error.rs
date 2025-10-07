@@ -1,7 +1,7 @@
 //! Service-specific error types
 
 use thiserror::Error;
-use crate::service_types::ServiceError;
+use crate::service::types::ServiceError;
 use chrono::Utc;
 
 /// Service result type

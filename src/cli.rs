@@ -71,7 +71,7 @@ impl Cli {
         println!("====================================");
         println!("📝 Task: {}", task);
         println!("⏰ Started at: {}", chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC"));
-        println!("");
+        println!();
 
         tracing::info!("Processing task: {}", task);
 
@@ -82,8 +82,7 @@ impl Cli {
 
         println!("🤖 Initializing AI agent...");
         let mut agent = create_agent(&config).await?;
-        let tools = agent.get_tools().await;
-        let tool_count = tools.lock().await.get_tool_names().len();
+        let tool_count = agent.tool_count().await;
         println!("✅ Agent initialized with {} tools", tool_count);
 
         println!("🧠 Processing task with AI model...");
@@ -116,16 +115,16 @@ impl Cli {
                                 println!("  📋 Requirements: {}", plan.requirements.join(", "));
                             }
                         }
-                        println!("");
+                        println!();
                         println!("📋 Summary:");
                         println!("  {}", task_result.summary);
                         if let Some(details) = task_result.details {
-                            println!("");
+                            println!();
                             println!("🔍 Detailed Results:");
                             println!("  {}", details.replace('\n', "\n  "));
                         }
                         if task_result.execution_time.is_some() {
-                            println!("");
+                            println!();
                             println!("📊 Performance Metrics:");
                             println!("  • Internal execution time: {}s", task_result.execution_time.unwrap_or(0));
                             println!("  • Total wall-clock time: {:.2}s", duration.as_secs_f32());
@@ -135,7 +134,7 @@ impl Cli {
                         println!("📋 Result:");
                         println!("{}", task_result.summary);
                         if let Some(details) = task_result.details {
-                            println!("");
+                            println!();
                             println!("🔍 Details:");
                             println!("{}", details);
                         }
@@ -151,7 +150,7 @@ impl Cli {
 
         println!("====================================");
         println!("🏁 Task execution finished at: {}", chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC"));
-        println!("");
+        println!();
 
         Ok(())
     }
@@ -237,22 +236,20 @@ impl Cli {
         println!();
     }
 
-    async fn print_available_tools(agent: &crate::agent::CodeAgent) {
-        let tools = agent.get_tools().await;
-        let tool_names = tools.lock().await.get_tool_names();
+    async fn print_available_tools(agent: &crate::agent::TaskAgent) {
+        let tools = agent.get_tools();
+        let tool_names = tools.get_tool_names().await;
 
         println!("Available tools:");
         for tool_name in tool_names {
-            if let Some(tool) = tools.lock().await.get_tool(&tool_name) {
-                println!("  • {} - {}", tool.name(), tool.description());
-            }
+            println!("  • {}", tool_name);
         }
         println!();
     }
 }
 
 /// Create an agent with the given configuration
-async fn create_agent(config: &AgentConfig) -> anyhow::Result<crate::agent::CodeAgent> {
+async fn create_agent(config: &AgentConfig) -> anyhow::Result<crate::agent::TaskAgent> {
     // Create model based on provider
     let model: Box<dyn LanguageModel> = match &config.model.provider {
         crate::config::ModelProvider::OpenAI => {
@@ -275,7 +272,7 @@ async fn create_agent(config: &AgentConfig) -> anyhow::Result<crate::agent::Code
         }
     };
 
-    let mut agent = crate::agent::CodeAgent::new(model, config.clone());
+    let agent = crate::agent::TaskAgent::new(model, config.clone());
 
     // Register basic tools
     agent.register_tool(crate::tools::ReadFileTool).await;

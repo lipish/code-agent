@@ -11,19 +11,24 @@
 //! - **Service Architecture**: Optional HTTP service with REST API (requires "service" feature)
 //! - **Metrics & Monitoring**: Comprehensive metrics and health checking (requires "service" feature)
 
-pub mod agent;
-pub mod config;
-pub mod models;
-pub mod tools;
-pub mod types;
-pub mod errors;
-pub mod understanding;
-pub mod execution;
+// Core modules
+pub mod agent;          // Task agent (now a directory module)
+pub mod config;         // Configuration management
+pub mod errors;         // Error types and handling
+pub mod models;         // AI model interfaces
+pub mod prompts;        // Prompt engineering system
+pub mod security;       // Security features (NEW)
+pub mod tools;          // Tool system
+pub mod types;          // Core type definitions
+
+// Execution modules
+pub mod execution;      // Execution operations (file, command)
+pub mod planning;       // Task planning and analysis (formerly understanding)
+
+// Helper modules
+pub mod task_helpers;   // Task helper functions
 
 // Service modules (optional, enabled with "service" feature)
-#[cfg(feature = "service")]
-pub mod service_types;
-
 #[cfg(feature = "service")]
 pub mod service;
 
@@ -31,7 +36,12 @@ pub mod service;
 pub mod cli;
 
 // Re-export main types and functions for convenience
-pub use agent::CodeAgent;
+pub use agent::TaskAgent;
+
+// Re-export deprecated alias (allow deprecated warning for the export itself)
+#[allow(deprecated)]
+pub use agent::CodeAgent; // Deprecated: Use TaskAgent instead
+
 pub use config::AgentConfig;
 pub use models::LanguageModel;
 pub use tools::Tool;
@@ -40,10 +50,19 @@ pub use errors::AgentError;
 
 // Service exports (only available with "service" feature)
 #[cfg(feature = "service")]
-pub use service_types::{
-    TaskRequest, TaskResponse, BatchTaskRequest, BatchTaskResponse,
-    TaskContext, TaskPriority, TaskStatus, TaskResult,
-    ServiceConfig, ServiceStatus, ServiceError, BatchExecutionMode,
+pub use service::types::{
+    // Task types
+    TaskRequest, TaskResponse, TaskStatus, TaskResult, TaskPriority,
+    TaskContext, TaskConstraints, TaskPlan, TaskComplexity,
+    ExecutionStep, StepType, StepStatus, TaskMetrics,
+    TaskArtifact, ArtifactType, ServiceError,
+    // Batch types
+    BatchTaskRequest, BatchTaskResponse, BatchExecutionMode, BatchStatistics,
+    // Service types
+    ServiceConfig, ServiceStatus, ServiceHealth,
+    SystemMetrics, NetworkMetrics,
+    // WebSocket types
+    WebSocketMessage,
 };
 
 #[cfg(feature = "service")]

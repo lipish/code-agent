@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::RwLock;
-use crate::service_types::{SystemMetrics, ServiceHealth};
+use crate::service::types::{SystemMetrics, ServiceHealth};
 
 /// Metrics collector for the AI Agent service
 #[derive(Debug)]

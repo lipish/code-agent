@@ -43,7 +43,7 @@ pub struct TaskPlan {
     pub requirements: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TaskComplexity {
     Simple,    // Single step operation
     Moderate,  // Requires several steps

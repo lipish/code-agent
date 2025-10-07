@@ -131,39 +131,68 @@ pub struct ToolCall {
     pub args: ToolArgs,
 }
 
-/// Tool registry
+/// Tool registry with internal locking for thread-safe access
+///
+/// This registry uses async `RwLock` internally to allow multiple concurrent readers
+/// while ensuring exclusive access for writes. This reduces lock contention
+/// compared to external `Mutex` wrapping.
 pub struct ToolRegistry {
-    tools: HashMap<String, Box<dyn Tool>>,
+    tools: tokio::sync::RwLock<HashMap<String, Box<dyn Tool>>>,
+}
+
+impl Default for ToolRegistry {
+    fn default() -> Self {
+        Self {
+            tools: tokio::sync::RwLock::new(HashMap::new()),
+        }
+    }
 }
 
 impl ToolRegistry {
     pub fn new() -> Self {
-        Self {
-            tools: HashMap::new(),
-        }
+        Self::default()
     }
 
-    pub fn register<T: Tool + 'static>(&mut self, tool: T) {
-        self.tools.insert(tool.name().to_string(), Box::new(tool));
+    /// Register a new tool
+    ///
+    /// This method acquires a write lock, so it should be called during
+    /// initialization rather than in hot paths.
+    pub async fn register<T: Tool + 'static>(&self, tool: T) {
+        let mut tools = self.tools.write().await;
+        tools.insert(tool.name().to_string(), Box::new(tool));
     }
 
+    /// Execute a tool call
+    ///
+    /// This method only acquires a read lock for looking up the tool,
+    /// allowing multiple concurrent executions.
     pub async fn execute(&self, tool_call: &ToolCall) -> Result<ToolResult, ToolError> {
-        let tool = self.tools.get(&tool_call.name)
+        // Acquire read lock and get tool reference
+        let tools = self.tools.read().await;
+        let tool = tools.get(&tool_call.name)
             .ok_or_else(|| ToolError::ToolNotFound(tool_call.name.clone()))?;
 
+        // Execute the tool (lock is held during execution, but this is necessary
+        // since we can't clone Box<dyn Tool>)
         tool.execute(&tool_call.args).await
     }
 
-    pub fn get_tool_names(&self) -> Vec<String> {
-        self.tools.keys().cloned().collect()
+    /// Get all registered tool names
+    pub async fn get_tool_names(&self) -> Vec<String> {
+        let tools = self.tools.read().await;
+        tools.keys().cloned().collect()
     }
 
-    pub fn get_tool(&self, name: &str) -> Option<&dyn Tool> {
-        self.tools.get(name).map(|tool| tool.as_ref())
+    /// Get a tool by name (returns a clone of tool info, not the tool itself)
+    pub async fn has_tool(&self, name: &str) -> bool {
+        let tools = self.tools.read().await;
+        tools.contains_key(name)
     }
 
-    pub fn get_all_tools(&self) -> Vec<&dyn Tool> {
-        self.tools.values().map(|tool| tool.as_ref()).collect()
+    /// Get the number of registered tools
+    pub async fn tool_count(&self) -> usize {
+        let tools = self.tools.read().await;
+        tools.len()
     }
 }
 

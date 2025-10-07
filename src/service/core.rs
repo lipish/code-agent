@@ -9,15 +9,22 @@ use chrono::Utc;
 use uuid::Uuid;
 use tracing::info;
 
-use crate::agent::CodeAgent;
+use crate::agent::TaskAgent;
 use crate::config::AgentConfig;
 use crate::models::{LanguageModel, ZhipuModel};
-use crate::{ServiceConfig, TaskRequest, TaskResponse, TaskStatus, ServiceStatus, MetricsSnapshot, TaskResult};
-use crate::service_types::{TaskPlan, TaskMetrics, BatchTaskRequest, BatchTaskResponse, BatchExecutionMode, BatchStatistics, StepType, StepStatus, ExecutionStep};
+use crate::service::types::{
+    self as service_types,
+    TaskRequest, TaskResponse, TaskStatus, TaskPlan, TaskMetrics, TaskComplexity,
+    BatchTaskRequest, BatchTaskResponse, BatchExecutionMode, BatchStatistics,
+    StepType, StepStatus, ExecutionStep,
+    ServiceConfig, ServiceStatus,
+};
 use crate::service::error::{ServiceResult, ServiceErrorType, ErrorBuilder};
-use crate::service::metrics_simple::MetricsCollector;
+use crate::service::metrics_simple::{MetricsCollector, MetricsSnapshot};
 
-/// Code Agent Service
+/// Task Agent Service
+///
+/// A general-purpose service for executing various types of tasks through AI agents.
 #[derive(Debug)]
 pub struct CodeAgentService {
     /// Service configuration
@@ -25,7 +32,7 @@ pub struct CodeAgentService {
     /// Metrics collector
     metrics: Arc<MetricsCollector>,
     /// Agent instance
-    agent: Arc<RwLock<CodeAgent>>,
+    agent: Arc<RwLock<TaskAgent>>,
     /// Active tasks
     active_tasks: Arc<RwLock<HashMap<String, Arc<RwLock<TaskContext>>>>>,
     /// Semaphore for limiting concurrent tasks
@@ -63,10 +70,10 @@ impl CodeAgentService {
 
         // Create the agent
         let model = create_model_from_config(&agent_config)?;
-        let mut agent = CodeAgent::new(model, agent_config.clone());
+        let agent = TaskAgent::new(model, agent_config.clone());
 
         // Register basic tools
-        register_basic_tools(&mut agent).await?;
+        register_basic_tools(&agent).await?;
 
         let service = Self {
             available_tools: get_available_tools(),
@@ -108,14 +115,21 @@ impl CodeAgentService {
             start_time: Instant::now(),
             plan: None,
             metrics: TaskMetrics {
-                total_execution_time: 0,
-                planning_time_ms: 0,
-                execution_time_ms: 0,
+                total_time_ms: 0,
+                model_time_ms: 0,
+                tool_time_ms: 0,
                 steps_executed: 0,
-                tools_used: 0,
+                tool_calls: 0,
+                model_calls: 0,
+                tokens_used: None,
+                // Legacy fields
+                total_execution_time: Some(0),
+                planning_time_ms: Some(0),
+                execution_time_ms: Some(0),
+                tools_used: Some(0),
                 memory_usage_mb: None,
                 cpu_usage_percent: None,
-                custom_metrics: HashMap::new(),
+                custom_metrics: Some(HashMap::new()),
             },
             current_step: 0,
         }));
@@ -132,7 +146,7 @@ impl CodeAgentService {
                 .as_ref()
                 .and_then(|c| c.constraints.as_ref())
                 .and_then(|c| c.max_execution_time)
-                .unwrap_or(self.config.default_task_timeout)
+                .unwrap_or(self.config.default_task_timeout.unwrap_or(self.config.request_timeout_seconds))
         );
 
         let result = timeout(task_timeout, self.execute_task_internal(task_context.clone())).await;
@@ -146,7 +160,7 @@ impl CodeAgentService {
         match result {
             Ok(task_result) => {
                 self.metrics.record_task_completion(
-                    task_result.metrics.total_execution_time as f64,
+                    task_result.metrics.total_execution_time.unwrap_or(task_result.metrics.total_time_ms) as f64,
                     task_result.status == TaskStatus::Completed,
                 ).await;
                 Ok(task_result)
@@ -212,7 +226,7 @@ impl CodeAgentService {
                 match resp.status {
                     TaskStatus::Completed => {
                         completed_tasks += 1;
-                        total_execution_time += resp.metrics.total_execution_time;
+                        total_execution_time += resp.metrics.total_execution_time.unwrap_or(resp.metrics.total_time_ms);
                     }
                     _ => failed_tasks += 1,
                 }
@@ -222,22 +236,33 @@ impl CodeAgentService {
         }
 
         let statistics = BatchStatistics {
-            total_tasks: responses.len() as u32,
-            completed_tasks,
+            total_tasks: responses.len(),
+            successful_tasks: completed_tasks,
             failed_tasks,
-            total_execution_time,
-            average_execution_time: if completed_tasks > 0 {
-                total_execution_time as f64 / completed_tasks as f64
+            total_time_ms: total_execution_time,
+            average_time_ms: if completed_tasks > 0 {
+                total_execution_time / completed_tasks as u64
             } else {
-                0.0
+                0
             },
+            // Legacy fields
+            completed_tasks: Some(completed_tasks),
+            total_execution_time: Some(total_execution_time),
+            average_execution_time: Some(if completed_tasks > 0 {
+                total_execution_time / completed_tasks as u64
+            } else {
+                0
+            }),
         };
+
+        let results = responses.into_iter().collect::<Result<Vec<_>, _>>()
+            .map_err(|_| ErrorBuilder::internal_server_error("Failed to collect batch responses"))?;
 
         Ok(BatchTaskResponse {
             batch_id,
-            responses: responses.into_iter().collect::<Result<Vec<_>, _>>()
-                .map_err(|_| ErrorBuilder::internal_server_error("Failed to collect batch responses"))?,
+            results: results.clone(),
             statistics,
+            responses: Some(results),  // Legacy field
         })
     }
 
@@ -282,18 +307,24 @@ impl CodeAgentService {
     pub async fn get_service_status(&self) -> ServiceResult<ServiceStatus> {
         let metrics_snapshot = self.metrics.get_metrics_snapshot().await;
         let health = self.metrics.get_health_status().await;
+        let health_str = format!("{:?}", health);
 
         Ok(ServiceStatus {
             name: "AI Agent Service".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
-            status: health,
+            health,
             uptime_seconds: metrics_snapshot.uptime_seconds,
-            active_tasks: metrics_snapshot.active_tasks as u32,
-            completed_tasks: metrics_snapshot.completed_tasks,
-            failed_tasks: metrics_snapshot.failed_tasks,
-            available_tools: self.available_tools.clone(),
+            active_tasks: metrics_snapshot.active_tasks as usize,
+            total_tasks_processed: metrics_snapshot.completed_tasks + metrics_snapshot.failed_tasks,
             system_metrics: metrics_snapshot.system_metrics,
-            last_updated: Utc::now(),
+            network_metrics: Default::default(),
+            timestamp: Utc::now(),
+            // Legacy fields
+            status: Some(health_str),
+            completed_tasks: Some(metrics_snapshot.completed_tasks),
+            failed_tasks: Some(metrics_snapshot.failed_tasks),
+            available_tools: self.available_tools.clone(),
+            last_updated: Some(Utc::now()),
         })
     }
 
@@ -321,16 +352,21 @@ impl CodeAgentService {
         let mut steps = Vec::new();
 
         // Create execution step for planning
+        let now = Utc::now();
         steps.push(ExecutionStep {
             step_number: 1,
             step_type: StepType::Planning,
             description: "Understanding task and creating execution plan".to_string(),
-            input: Some(serde_json::to_value(&task_request).unwrap_or_default()),
-            output: None,
             status: StepStatus::Running,
+            output: None,
             error: None,
-            execution_time_ms: 0,
-            timestamp: Utc::now(),
+            started_at: Some(now),
+            completed_at: None,
+            duration_ms: None,
+            // Legacy fields
+            input: Some(serde_json::to_value(&task_request).unwrap_or_default()),
+            execution_time_ms: Some(0),
+            timestamp: Some(now),
         });
 
         // Execute task using the agent
@@ -339,22 +375,28 @@ impl CodeAgentService {
             match agent.process_task(&task_request.task).await {
                 Ok(result) => {
                     // Update planning step
+                    let planning_duration = planning_start.elapsed().as_millis() as u64;
                     if let Some(step) = steps.last_mut() {
                         step.status = StepStatus::Completed;
-                        step.execution_time_ms = planning_start.elapsed().as_millis() as u64;
+                        step.duration_ms = Some(planning_duration);
+                        step.execution_time_ms = Some(planning_duration);
+                        step.completed_at = Some(Utc::now());
                         step.output = Some(serde_json::json!({
                             "task_plan": result.task_plan,
                             "success": result.success
-                        }));
+                        }).to_string());
                     }
 
                     Some(result)
                 }
                 Err(e) => {
                     // Update planning step with error
+                    let planning_duration = planning_start.elapsed().as_millis() as u64;
                     if let Some(step) = steps.last_mut() {
                         step.status = StepStatus::Failed;
-                        step.execution_time_ms = planning_start.elapsed().as_millis() as u64;
+                        step.duration_ms = Some(planning_duration);
+                        step.execution_time_ms = Some(planning_duration);
+                        step.completed_at = Some(Utc::now());
                         step.error = Some(e.to_string());
                     }
 
@@ -383,41 +425,52 @@ impl CodeAgentService {
         if let Some(agent_result) = agent_result {
             // Create execution step for task execution
             let execution_start = Instant::now();
+            let exec_duration = execution_start.elapsed().as_millis() as u64;
+            let exec_now = Utc::now();
             steps.push(ExecutionStep {
                 step_number: 2,
                 step_type: StepType::Execution,
                 description: "Executing task plan".to_string(),
-                input: Some(serde_json::json!({
-                    "task": task_request.task
-                })),
+                status: if agent_result.success { StepStatus::Completed } else { StepStatus::Failed },
                 output: Some(serde_json::json!({
                     "summary": agent_result.summary,
                     "success": agent_result.success
-                })),
-                status: if agent_result.success { StepStatus::Completed } else { StepStatus::Failed },
+                }).to_string()),
                 error: if !agent_result.success {
                     agent_result.details.clone()
                 } else {
                     None
                 },
-                execution_time_ms: execution_start.elapsed().as_millis() as u64,
-                timestamp: Utc::now(),
+                started_at: Some(exec_now),
+                completed_at: Some(exec_now),
+                duration_ms: Some(exec_duration),
+                // Legacy fields
+                input: Some(serde_json::json!({
+                    "task": task_request.task
+                })),
+                execution_time_ms: Some(exec_duration),
+                timestamp: Some(exec_now),
             });
 
             // Create completion step
+            let comp_now = Utc::now();
             steps.push(ExecutionStep {
                 step_number: 3,
                 step_type: StepType::Completion,
                 description: "Task execution completed".to_string(),
-                input: None,
+                status: StepStatus::Completed,
                 output: Some(serde_json::json!({
                     "execution_time": agent_result.execution_time,
                     "success": agent_result.success
-                })),
-                status: StepStatus::Completed,
+                }).to_string()),
                 error: None,
-                execution_time_ms: 0,
-                timestamp: Utc::now(),
+                started_at: Some(comp_now),
+                completed_at: Some(comp_now),
+                duration_ms: Some(0),
+                // Legacy fields
+                input: None,
+                execution_time_ms: Some(0),
+                timestamp: Some(comp_now),
             });
 
             // Update task context
@@ -430,9 +483,9 @@ impl CodeAgentService {
                 };
                 context.steps = steps.clone();
                 context.plan = agent_result.task_plan.as_ref().map(|p| convert_task_plan(p.clone()));
-                context.metrics.total_execution_time = agent_result.execution_time.unwrap_or(0);
-                context.metrics.planning_time_ms = planning_start.elapsed().as_millis() as u64;
-                context.metrics.execution_time_ms = execution_start.elapsed().as_millis() as u64;
+                context.metrics.total_execution_time = Some(agent_result.execution_time.unwrap_or(0));
+                context.metrics.planning_time_ms = Some(planning_start.elapsed().as_millis() as u64);
+                context.metrics.execution_time_ms = Some(execution_start.elapsed().as_millis() as u64);
                 context.metrics.steps_executed = steps.len() as u32;
             }
 
@@ -440,7 +493,7 @@ impl CodeAgentService {
             TaskResponse {
                 task_id: task_id_clone,
                 status: if agent_result.success { TaskStatus::Completed } else { TaskStatus::Failed },
-                result: Some(TaskResult {
+                result: Some(service_types::TaskResult {
                     success: agent_result.success,
                     summary: agent_result.summary,
                     details: agent_result.details,
@@ -448,7 +501,7 @@ impl CodeAgentService {
                     execution_time: agent_result.execution_time.unwrap_or(0),
                 }),
                 plan: agent_result.task_plan.map(convert_task_plan),
-                steps: steps,
+                steps,
                 metrics: context.metrics.clone(),
                 error: None,
                 created_at: Utc::now(),
@@ -491,7 +544,7 @@ fn create_model_from_config(config: &AgentConfig) -> Result<Box<dyn LanguageMode
 }
 
 /// Register basic tools with the agent
-async fn register_basic_tools(agent: &mut CodeAgent) -> ServiceResult<()> {
+async fn register_basic_tools(agent: &TaskAgent) -> ServiceResult<()> {
     use crate::tools::{ReadFileTool, WriteFileTool, RunCommandTool, ListFilesTool};
 
     agent.register_tool(ReadFileTool).await;
@@ -512,18 +565,21 @@ fn get_available_tools() -> Vec<String> {
     ]
 }
 
-/// Convert types::TaskPlan to service_types::TaskPlan
+/// Convert types::TaskPlan to service::types::TaskPlan
 fn convert_task_plan(plan: crate::types::TaskPlan) -> TaskPlan {
     TaskPlan {
-        understanding: plan.understanding,
-        approach: plan.approach,
+        understanding: plan.understanding.clone(),
+        approach: plan.approach.clone(),
         complexity: match plan.complexity {
-            crate::types::TaskComplexity::Simple => crate::service_types::TaskComplexity::Simple,
-            crate::types::TaskComplexity::Moderate => crate::service_types::TaskComplexity::Moderate,
-            crate::types::TaskComplexity::Complex => crate::service_types::TaskComplexity::Complex,
+            crate::types::TaskComplexity::Simple => TaskComplexity::Simple,
+            crate::types::TaskComplexity::Moderate => TaskComplexity::Medium,
+            crate::types::TaskComplexity::Complex => TaskComplexity::Complex,
         },
-        estimated_steps: plan.estimated_steps.unwrap_or(1),
+        steps: vec![plan.approach],  // Convert approach to steps
+        required_tools: vec![],  // Not available in types::TaskPlan
+        estimated_time: None,  // Not available in types::TaskPlan
+        estimated_steps: plan.estimated_steps,
         requirements: plan.requirements,
-        created_at: Utc::now(),
+        created_at: Some(Utc::now()),
     }
 }

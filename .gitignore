@@ -25,3 +25,7 @@ node_modules/
 
 # Ignore the cloned Roo-Code analysis directory unless explicitly needed
 Roo-Code/
+
+# Generated prompt templates (keep default templates)
+prompts/custom-generated.yaml
+prompts/*-generated.yaml

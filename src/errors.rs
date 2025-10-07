@@ -66,6 +66,87 @@ pub enum ToolError {
 
     #[error("Timeout error")]
     TimeoutError,
+
+    #[error("File operation error: {0}")]
+    FileOperation(#[from] FileOperationError),
+
+    #[error("Command operation error: {0}")]
+    CommandOperation(#[from] CommandOperationError),
+}
+
+/// File operation specific errors
+#[derive(Debug, Error, Clone)]
+pub enum FileOperationError {
+    #[error("File not found: {path}")]
+    NotFound { path: String },
+
+    #[error("Permission denied: {path}")]
+    PermissionDenied { path: String },
+
+    #[error("File too large: {size} bytes, max: {max_size} bytes")]
+    FileTooLarge { size: u64, max_size: u64 },
+
+    #[error("Invalid file path: {path}")]
+    InvalidPath { path: String },
+
+    #[error("Directory not found: {path}")]
+    DirectoryNotFound { path: String },
+
+    #[error("IO error for '{path}': {message}")]
+    IoError { path: String, message: String },
+
+    #[error("File already exists: {path}")]
+    AlreadyExists { path: String },
+}
+
+/// Command operation specific errors
+#[derive(Debug, Error, Clone)]
+pub enum CommandOperationError {
+    #[error("Command not found: {command}")]
+    CommandNotFound { command: String },
+
+    #[error("Command failed with exit code {code}: {stderr}")]
+    ExecutionFailed { code: i32, stderr: String },
+
+    #[error("Command timeout after {seconds} seconds")]
+    Timeout { seconds: u64 },
+
+    #[error("Invalid command: {command}")]
+    InvalidCommand { command: String },
+
+    #[error("Permission denied for command: {command}")]
+    PermissionDenied { command: String },
+
+    #[error("Command output too large: {size} bytes, max: {max_size} bytes")]
+    OutputTooLarge { size: usize, max_size: usize },
+
+    #[error("IO error executing command '{command}': {message}")]
+    IoError { command: String, message: String },
+
+    #[error("Security error: {0}")]
+    Security(#[from] SecurityError),
+}
+
+/// Security-related errors
+#[derive(Debug, Error, Clone)]
+pub enum SecurityError {
+    #[error("Empty command")]
+    EmptyCommand,
+
+    #[error("Unauthorized command: {command}")]
+    UnauthorizedCommand { command: String },
+
+    #[error("Command contains dangerous patterns: {pattern}")]
+    DangerousPattern { pattern: String },
+
+    #[error("Path traversal attempt detected: {path}")]
+    PathTraversal { path: String },
+
+    #[error("Resource limit exceeded: {resource}")]
+    ResourceLimitExceeded { resource: String },
+
+    #[error("Suspicious command arguments: {args}")]
+    SuspiciousArguments { args: String },
 }
 
 /// Error handler with retry logic
@@ -111,11 +192,11 @@ impl ErrorHandler {
     }
 
     fn should_retry(&self, error: &AgentError) -> bool {
-        match error {
-            AgentError::NetworkError(_) => true,
-            AgentError::TimeoutError => true,
-            AgentError::ModelError(ModelError::RateLimited) => true,
-            _ => false,
-        }
+        matches!(
+            error,
+            AgentError::NetworkError(_)
+            | AgentError::TimeoutError
+            | AgentError::ModelError(ModelError::RateLimited)
+        )
     }
 }

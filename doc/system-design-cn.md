@@ -113,7 +113,7 @@ AI-Native 代码助手已转换为独立服务，支持多种接口：
 pub struct AiAgentService {
     config: ServiceConfig,
     metrics: Arc<MetricsCollector>,
-    agent: Arc<RwLock<CodeAgent>>,
+    agent: Arc<RwLock<TaskAgent>>,  // 使用 TaskAgent（通用任务代理）
     active_tasks: Arc<RwLock<HashMap<String, Arc<RwLock<TaskContext>>>>,
     task_semaphore: Arc<Semaphore>,
     available_tools: Vec<String>,
@@ -358,40 +358,91 @@ impl MetricsCollector {
 
 #### 5. AI 理解引擎 (UnderstandingEngine)
 
-负责理解和分析用户任务，制定执行策略。
+负责理解和分析用户任务，制定执行策略。集成提示词工程系统。
 
-**文件位置：** `src/understanding.rs`
+**文件位置：** `src/understanding.rs` (186行，重构后)
 
 ```rust
 pub struct UnderstandingEngine {
     model: Arc<dyn LanguageModel>,
-    context: TaskContext,
+    prompt_template: PromptTemplate,  // 提示词模板系统
 }
 
 impl UnderstandingEngine {
-    pub async fn understand(&self, request: &str) -> Result<TaskPlan, AgentError> {
-        let prompt = self.build_understanding_prompt(request);
+    // 使用默认模板创建
+    pub fn new(model: Arc<dyn LanguageModel>) -> Self {
+        Self {
+            model,
+            prompt_template: PromptTemplate::default(),
+        }
+    }
+
+    // 使用自定义模板创建
+    pub fn with_template(model: Arc<dyn LanguageModel>, template: PromptTemplate) -> Self {
+        Self {
+            model,
+            prompt_template: template,
+        }
+    }
+
+    // 分析任务（自动推断类型）
+    pub async fn understand_task(&self, request: &str) -> Result<TaskPlan, AgentError> {
+        self.understand_task_with_type(request, None).await
+    }
+
+    // 分析任务（指定类型）
+    pub async fn understand_task_with_type(
+        &self,
+        request: &str,
+        task_type: Option<&str>,
+    ) -> Result<TaskPlan, AgentError> {
+        let prompt = self.build_understanding_prompt(request, task_type);
         let response = self.model.complete(&prompt).await?;
         self.parse_task_plan(&response.content)
     }
 
-    fn build_understanding_prompt(&self, request: &str) -> String {
-        format!(
-            "你是一个具有完全自主权的智能编程助手。
+    // 使用提示词模板系统构建提示词
+    fn build_understanding_prompt(&self, request: &str, task_type: Option<&str>) -> String {
+        let mut builder = PromptBuilder::new(self.prompt_template.clone());
 
-要分析的任务: {request}
+        // 设置任务类型（显式或推断）
+        if let Some(tt) = task_type {
+            builder = builder.task_type(tt);
+        } else {
+            let inferred_type = self.infer_task_type(request);
+            if let Some(tt) = inferred_type {
+                builder = builder.task_type(&tt);
+            }
+        }
 
-请分析这个任务并提供：
-1. 你对用户需求的理解
-2. 你解决问题的方法
-3. 复杂度评估（简单/中等/复杂）
-4. 你识别出的任何要求或依赖项
+        builder.build(request)
+    }
 
-你在构建回应时拥有完全的自由。要全面但简洁。"
-        )
+    // 推断任务类型（9种场景）
+    fn infer_task_type(&self, request: &str) -> Option<String> {
+        let lower = request.to_lowercase();
+        if lower.contains("test") { Some("testing".to_string()) }
+        else if lower.contains("refactor") { Some("refactoring".to_string()) }
+        else if lower.contains("debug") || lower.contains("fix") { Some("debugging".to_string()) }
+        else if lower.contains("document") { Some("documentation".to_string()) }
+        else if lower.contains("optimize") { Some("optimization".to_string()) }
+        else if lower.contains("design") { Some("architecture".to_string()) }
+        else if lower.contains("read") || lower.contains("file") { Some("file_operations".to_string()) }
+        else if lower.contains("run") || lower.contains("command") { Some("command_execution".to_string()) }
+        else if lower.contains("create") || lower.contains("generate") { Some("code_generation".to_string()) }
+        else { None }
     }
 }
 ```
+
+**重构改进**:
+- ✅ 集成提示词工程系统
+- ✅ 支持自定义模板
+- ✅ 自动任务类型推断
+- ✅ 9种预定义场景
+- ✅ 从 agent.rs 分离出来（职责清晰）
+
+详见：[提示词工程文档](./PROMPT_ENGINEERING.md)
 
 #### 2. AI 执行引擎 (ExecutionEngine)
 
@@ -467,9 +518,103 @@ impl ToolRegistry {
 
 ## 核心功能设计
 
+### 0. 提示词工程系统 (新增)
+
+灵活的提示词模板系统，参考 OpenAI Codex 和 Roo-Code 最佳实践。
+
+**文件位置：** `src/prompts.rs` (300行)
+
+#### 架构设计
+
+```rust
+// 分层提示词模板
+pub struct PromptTemplate {
+    pub global: GlobalTemplate,              // 全局模板
+    pub project: Option<ProjectRules>,       // 项目规则
+    pub scenarios: HashMap<String, ScenarioPrompt>, // 场景提示词
+}
+
+// 全局模板
+pub struct GlobalTemplate {
+    pub system_role: String,                 // 系统角色
+    pub output_format: OutputFormat,         // 输出格式
+    pub constraints: Vec<String>,            // 通用约束
+}
+
+// 项目规则
+pub struct ProjectRules {
+    pub tech_stack: Vec<String>,             // 技术栈
+    pub conventions: Vec<String>,            // 编码规范
+    pub context: Option<String>,             // 项目上下文
+    pub architecture: Option<String>,        // 架构说明
+}
+
+// 场景提示词
+pub struct ScenarioPrompt {
+    pub name: String,                        // 场景名称
+    pub description: String,                 // 场景描述
+    pub instructions: Vec<String>,           // 具体指令
+    pub output_structure: Option<String>,    // 输出结构
+    pub examples: Vec<PromptExample>,        // Few-shot 示例
+}
+
+// 流式构建器
+pub struct PromptBuilder {
+    template: PromptTemplate,
+    task_type: Option<String>,
+    context: HashMap<String, String>,
+}
+```
+
+#### 核心特性
+
+- **分层结构**: 全局模板 + 项目规则 + 场景指令
+- **外置配置**: YAML 文件配置，无需修改代码
+- **场景支持**: 9+ 预定义场景（代码生成、重构、调试等）
+- **动态加载**: 运行时加载和切换模板
+- **智能推断**: 自动识别任务类型
+- **可扩展**: 轻松添加自定义场景
+
+#### 内置场景
+
+1. **code_generation** - 代码生成
+2. **refactoring** - 代码重构
+3. **debugging** - 调试修复
+4. **testing** - 测试编写
+5. **documentation** - 文档编写
+6. **architecture** - 架构设计
+7. **optimization** - 性能优化
+8. **file_operations** - 文件操作
+9. **command_execution** - 命令执行
+
+#### 使用示例
+
+```rust
+// 使用默认模板
+let engine = UnderstandingEngine::new(model);
+let plan = engine.understand_task("创建配置加载器").await?;
+
+// 使用自定义模板
+let template = PromptTemplate::from_file("prompts/rust-project.yaml")?;
+let engine = UnderstandingEngine::with_template(model, template);
+
+// 指定任务类型
+let plan = engine
+    .understand_task_with_type("优化性能", Some("optimization"))
+    .await?;
+
+// 动态构建提示词
+let prompt = PromptBuilder::new(template)
+    .task_type("code_generation")
+    .context("language", "Rust")
+    .build("创建异步文件读取函数");
+```
+
+详见：[提示词工程文档](./PROMPT_ENGINEERING.md)
+
 ### 1. 任务理解
 
-AI 模型自主理解用户意图，不受格式约束。
+AI 模型自主理解用户意图，不受格式约束。使用提示词工程系统增强理解能力。
 
 **文件位置：** `src/types.rs`
 

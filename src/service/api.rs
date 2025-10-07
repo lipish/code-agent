@@ -6,13 +6,13 @@ use reqwest::Client;
 use serde_json;
 use futures::stream::{Stream};
 
-use crate::service_types::{
+use crate::service::types::{
     TaskRequest, TaskResponse, BatchTaskRequest, BatchTaskResponse,
-    ServiceStatus, WebSocketMessage, TaskContext, BatchExecutionMode
+    ServiceStatus, WebSocketMessage, TaskContext, BatchExecutionMode,
+    ServiceError,
 };
 use crate::service::{ServiceResult, CodeAgentService, MetricsSnapshot};
-use crate::ServiceError;
-use crate::service::error::{ErrorBuilder};
+use crate::service::error::ErrorBuilder;
 
 /// Main API trait for Code Agent Service
 #[async_trait::async_trait]
@@ -360,6 +360,7 @@ pub mod examples {
                 },
             ],
             mode: BatchExecutionMode::Parallel,
+            metadata: None,
             continue_on_error: true,
         };
 
