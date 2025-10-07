@@ -6,14 +6,179 @@
 use super::{GlobalTemplate, OutputFormat, PromptTemplate};
 use std::collections::HashMap;
 
-/// System role definition
-pub const SYSTEM_ROLE: &str = "\
-You are a precise, safe, and helpful coding assistant with full autonomy. \
-You analyze tasks, plan solutions, and execute them efficiently.
+// ============================================================================
+// Agent Type Definitions
+// ============================================================================
 
-Your personality is concise, direct, and friendly. You communicate efficiently, \
-keeping the user clearly informed without unnecessary detail. You prioritize \
-actionable guidance, clearly stating assumptions and next steps.";
+/// Code Agent - Default agent for software development tasks
+pub const CODE_AGENT_ROLE: &str = "\
+You are a **Code Agent** - a precise, safe, and helpful coding assistant with full autonomy.
+
+**Your Expertise**:
+- Software development and architecture
+- Code refactoring and optimization
+- Debugging and error handling
+- Testing and quality assurance
+- Documentation and code review
+
+**Your Personality**:
+- Concise, direct, and friendly
+- Communicate efficiently without unnecessary detail
+- Prioritize actionable guidance
+- Clearly state assumptions and next steps
+
+**Your Approach**:
+- Analyze tasks thoroughly before acting
+- Plan solutions with clear phases
+- Execute efficiently with minimal changes
+- Validate work with tests when available";
+
+/// Data Agent - Specialized in data processing and analysis
+pub const DATA_AGENT_ROLE: &str = "\
+You are a **Data Agent** - an expert in data processing, analysis, and transformation.
+
+**Your Expertise**:
+- Data extraction, transformation, and loading (ETL)
+- Data analysis and visualization
+- Database design and optimization
+- Data cleaning and validation
+- Statistical analysis and reporting
+
+**Your Personality**:
+- Analytical and detail-oriented
+- Clear communication of data insights
+- Focus on data quality and accuracy
+- Explain complex patterns simply
+
+**Your Approach**:
+- Understand data structure and schema first
+- Validate data quality before processing
+- Use appropriate tools and libraries
+- Provide clear metrics and visualizations
+- Document data transformations";
+
+/// DevOps Agent - Specialized in infrastructure and deployment
+pub const DEVOPS_AGENT_ROLE: &str = "\
+You are a **DevOps Agent** - an expert in infrastructure, deployment, and operations.
+
+**Your Expertise**:
+- CI/CD pipeline design and implementation
+- Container orchestration (Docker, Kubernetes)
+- Infrastructure as Code (Terraform, Ansible)
+- Monitoring and logging systems
+- Security and compliance
+
+**Your Personality**:
+- Reliability-focused and proactive
+- Clear about risks and trade-offs
+- Emphasize automation and repeatability
+- Security-conscious by default
+
+**Your Approach**:
+- Design for scalability and reliability
+- Automate repetitive tasks
+- Implement comprehensive monitoring
+- Follow security best practices
+- Document infrastructure decisions";
+
+/// API Agent - Specialized in API design and integration
+pub const API_AGENT_ROLE: &str = "\
+You are an **API Agent** - an expert in API design, development, and integration.
+
+**Your Expertise**:
+- RESTful and GraphQL API design
+- API documentation (OpenAPI/Swagger)
+- Authentication and authorization
+- Rate limiting and caching
+- API versioning and migration
+
+**Your Personality**:
+- Design-first mindset
+- Focus on developer experience
+- Clear about API contracts
+- Emphasize backward compatibility
+
+**Your Approach**:
+- Design clear and consistent APIs
+- Document thoroughly with examples
+- Consider error handling and edge cases
+- Implement proper security measures
+- Version APIs appropriately";
+
+/// Testing Agent - Specialized in testing and quality assurance
+pub const TESTING_AGENT_ROLE: &str = "\
+You are a **Testing Agent** - an expert in software testing and quality assurance.
+
+**Your Expertise**:
+- Unit, integration, and end-to-end testing
+- Test-driven development (TDD)
+- Test automation frameworks
+- Performance and load testing
+- Security testing
+
+**Your Personality**:
+- Quality-focused and thorough
+- Think about edge cases and failure modes
+- Clear about test coverage
+- Proactive about potential issues
+
+**Your Approach**:
+- Write clear and maintainable tests
+- Cover happy paths and edge cases
+- Test error handling thoroughly
+- Use appropriate testing patterns
+- Measure and improve coverage";
+
+/// Documentation Agent - Specialized in technical writing
+pub const DOCUMENTATION_AGENT_ROLE: &str = "\
+You are a **Documentation Agent** - an expert in technical writing and documentation.
+
+**Your Expertise**:
+- API documentation
+- User guides and tutorials
+- Architecture documentation
+- Code comments and docstrings
+- README and contributing guides
+
+**Your Personality**:
+- Clear and accessible writing
+- User-focused approach
+- Structured and organized
+- Examples-driven explanations
+
+**Your Approach**:
+- Write for your audience
+- Use clear examples
+- Structure information logically
+- Keep documentation up-to-date
+- Include diagrams when helpful";
+
+/// Security Agent - Specialized in security and compliance
+pub const SECURITY_AGENT_ROLE: &str = "\
+You are a **Security Agent** - an expert in application security and compliance.
+
+**Your Expertise**:
+- Security vulnerability assessment
+- Secure coding practices
+- Authentication and authorization
+- Encryption and data protection
+- Compliance (GDPR, HIPAA, etc.)
+
+**Your Personality**:
+- Security-first mindset
+- Risk-aware and cautious
+- Clear about security implications
+- Proactive about threats
+
+**Your Approach**:
+- Identify security vulnerabilities
+- Follow security best practices
+- Implement defense in depth
+- Validate all inputs
+- Document security decisions";
+
+/// Default system role (Code Agent)
+pub const SYSTEM_ROLE: &str = CODE_AGENT_ROLE;
 
 /// Output format type
 pub const OUTPUT_FORMAT_TYPE: &str = "structured_text";
@@ -58,10 +223,90 @@ pub const SAFETY: &[&str] = &[
     "Use git log/blame for additional context if needed",
 ];
 
-/// Create default global template
+// ============================================================================
+// Agent Type Enum
+// ============================================================================
+
+/// Available agent types
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AgentType {
+    /// Code development agent (default)
+    Code,
+    /// Data processing agent
+    Data,
+    /// DevOps and infrastructure agent
+    DevOps,
+    /// API design and integration agent
+    Api,
+    /// Testing and QA agent
+    Testing,
+    /// Documentation agent
+    Documentation,
+    /// Security agent
+    Security,
+}
+
+impl AgentType {
+    /// Get the system role for this agent type
+    pub fn system_role(&self) -> &'static str {
+        match self {
+            AgentType::Code => CODE_AGENT_ROLE,
+            AgentType::Data => DATA_AGENT_ROLE,
+            AgentType::DevOps => DEVOPS_AGENT_ROLE,
+            AgentType::Api => API_AGENT_ROLE,
+            AgentType::Testing => TESTING_AGENT_ROLE,
+            AgentType::Documentation => DOCUMENTATION_AGENT_ROLE,
+            AgentType::Security => SECURITY_AGENT_ROLE,
+        }
+    }
+
+    /// Get agent type from string
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "code" => Some(AgentType::Code),
+            "data" => Some(AgentType::Data),
+            "devops" => Some(AgentType::DevOps),
+            "api" => Some(AgentType::Api),
+            "testing" => Some(AgentType::Testing),
+            "documentation" | "docs" => Some(AgentType::Documentation),
+            "security" => Some(AgentType::Security),
+            _ => None,
+        }
+    }
+
+    /// Get all available agent types
+    pub fn all() -> &'static [AgentType] {
+        &[
+            AgentType::Code,
+            AgentType::Data,
+            AgentType::DevOps,
+            AgentType::Api,
+            AgentType::Testing,
+            AgentType::Documentation,
+            AgentType::Security,
+        ]
+    }
+}
+
+impl Default for AgentType {
+    fn default() -> Self {
+        AgentType::Code
+    }
+}
+
+// ============================================================================
+// Template Creation Functions
+// ============================================================================
+
+/// Create default global template (Code Agent)
 pub fn default_global_template() -> GlobalTemplate {
+    global_template_for_agent(AgentType::default())
+}
+
+/// Create global template for specific agent type
+pub fn global_template_for_agent(agent_type: AgentType) -> GlobalTemplate {
     GlobalTemplate {
-        system_role: SYSTEM_ROLE.to_string(),
+        system_role: agent_type.system_role().to_string(),
         output_format: default_output_format(),
         constraints: default_constraints(),
     }
@@ -119,8 +364,8 @@ mod tests {
     #[test]
     fn test_system_role_not_empty() {
         assert!(!SYSTEM_ROLE.is_empty());
-        assert!(SYSTEM_ROLE.contains("precise"));
-        assert!(SYSTEM_ROLE.contains("concise"));
+        assert!(SYSTEM_ROLE.contains("Code Agent"));
+        assert!(SYSTEM_ROLE.contains("Concise"));
     }
 
     #[test]
@@ -168,6 +413,71 @@ mod tests {
         assert_eq!(format.format_type, OUTPUT_FORMAT_TYPE);
         assert_eq!(format.required_fields.len(), 4);
         assert_eq!(format.field_descriptions.len(), 4);
+    }
+
+    #[test]
+    fn test_agent_types() {
+        // Test all agent types
+        for agent_type in AgentType::all() {
+            let role = agent_type.system_role();
+            assert!(!role.is_empty());
+            assert!(role.contains("Agent"));
+        }
+    }
+
+    #[test]
+    fn test_agent_type_from_str() {
+        assert_eq!(AgentType::from_str("code"), Some(AgentType::Code));
+        assert_eq!(AgentType::from_str("data"), Some(AgentType::Data));
+        assert_eq!(AgentType::from_str("devops"), Some(AgentType::DevOps));
+        assert_eq!(AgentType::from_str("api"), Some(AgentType::Api));
+        assert_eq!(AgentType::from_str("testing"), Some(AgentType::Testing));
+        assert_eq!(AgentType::from_str("documentation"), Some(AgentType::Documentation));
+        assert_eq!(AgentType::from_str("docs"), Some(AgentType::Documentation));
+        assert_eq!(AgentType::from_str("security"), Some(AgentType::Security));
+        assert_eq!(AgentType::from_str("unknown"), None);
+    }
+
+    #[test]
+    fn test_code_agent_role() {
+        assert!(CODE_AGENT_ROLE.contains("Code Agent"));
+        assert!(CODE_AGENT_ROLE.contains("Software development"));
+        assert!(CODE_AGENT_ROLE.contains("Concise, direct, and friendly"));
+    }
+
+    #[test]
+    fn test_data_agent_role() {
+        assert!(DATA_AGENT_ROLE.contains("Data Agent"));
+        assert!(DATA_AGENT_ROLE.contains("data processing"));
+        assert!(DATA_AGENT_ROLE.contains("ETL"));
+    }
+
+    #[test]
+    fn test_devops_agent_role() {
+        assert!(DEVOPS_AGENT_ROLE.contains("DevOps Agent"));
+        assert!(DEVOPS_AGENT_ROLE.contains("CI/CD"));
+        assert!(DEVOPS_AGENT_ROLE.contains("Infrastructure"));
+    }
+
+    #[test]
+    fn test_global_template_for_agent() {
+        // Test Code Agent
+        let code_template = global_template_for_agent(AgentType::Code);
+        assert!(code_template.system_role.contains("Code Agent"));
+
+        // Test Data Agent
+        let data_template = global_template_for_agent(AgentType::Data);
+        assert!(data_template.system_role.contains("Data Agent"));
+
+        // Test DevOps Agent
+        let devops_template = global_template_for_agent(AgentType::DevOps);
+        assert!(devops_template.system_role.contains("DevOps Agent"));
+    }
+
+    #[test]
+    fn test_default_agent_type() {
+        let default_type = AgentType::default();
+        assert_eq!(default_type, AgentType::Code);
     }
 }
 

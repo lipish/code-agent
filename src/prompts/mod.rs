@@ -6,8 +6,17 @@
 mod defaults;
 
 pub use defaults::{
-    SYSTEM_ROLE, OUTPUT_FORMAT_TYPE, REQUIRED_FIELDS, FIELD_DESCRIPTIONS,
+    // Agent types
+    AgentType,
+    CODE_AGENT_ROLE, DATA_AGENT_ROLE, DEVOPS_AGENT_ROLE, API_AGENT_ROLE,
+    TESTING_AGENT_ROLE, DOCUMENTATION_AGENT_ROLE, SECURITY_AGENT_ROLE,
+    SYSTEM_ROLE,
+    // Output format
+    OUTPUT_FORMAT_TYPE, REQUIRED_FIELDS, FIELD_DESCRIPTIONS,
+    // Constraints
     CORE_PRINCIPLES, CODE_QUALITY, SAFETY,
+    // Template creation
+    global_template_for_agent,
 };
 
 use serde::{Deserialize, Serialize};
