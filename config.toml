@@ -1,13 +1,13 @@
 # AI-Native Code Agent Configuration
 
 [model]
-# Model provider: "openai", "anthropic", or "local"
-provider = "zhipu"
-model_name = "GLM-4.6"
-# Use environment variable for API key: ${ZHIPU_API_KEY}
-api_key = "${ZHIPU_API_KEY}"
-# Optional: custom endpoint for zhipu
-endpoint = "https://open.bigmodel.cn/api/paas/v4/"
+# Model provider: "zhipu", "deepseek", "moonshot", "openai", "anthropic"
+provider = "deepseek"
+model_name = "deepseek-chat"
+# Use environment variable for API key
+api_key = "${DEEPSEEK_API_KEY}"
+# Optional: custom endpoint (must include /v1 for OpenAI-compatible APIs)
+endpoint = "https://api.deepseek.com/v1"
 max_tokens = 4000
 temperature = 0.7
 

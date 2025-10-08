@@ -31,6 +31,8 @@ pub enum ModelProvider {
     OpenAI,
     Anthropic,
     Zhipu,
+    DeepSeek,
+    Moonshot,
     Local(String),
 }
 
@@ -97,7 +99,11 @@ impl AgentConfig {
 
     /// Load configuration from environment variables
     pub fn from_env() -> Result<Self, Box<dyn std::error::Error>> {
-        let provider = if std::env::var("ZHIPU_API_KEY").is_ok() {
+        let provider = if std::env::var("DEEPSEEK_API_KEY").is_ok() {
+            ModelProvider::DeepSeek
+        } else if std::env::var("MOONSHOT_API_KEY").is_ok() {
+            ModelProvider::Moonshot
+        } else if std::env::var("ZHIPU_API_KEY").is_ok() {
             ModelProvider::Zhipu
         } else if std::env::var("ANTHROPIC_API_KEY").is_ok() {
             ModelProvider::Anthropic
@@ -106,12 +112,16 @@ impl AgentConfig {
         };
 
         let model_name = match provider {
+            ModelProvider::DeepSeek => "deepseek-chat",
+            ModelProvider::Moonshot => "moonshot-v1-8k",
             ModelProvider::Zhipu => "GLM-4.6",
             ModelProvider::Anthropic => "claude-3-sonnet-20240229",
             _ => "gpt-4-turbo-preview",
         };
 
         let api_key = match provider {
+            ModelProvider::DeepSeek => std::env::var("DEEPSEEK_API_KEY").ok(),
+            ModelProvider::Moonshot => std::env::var("MOONSHOT_API_KEY").ok(),
             ModelProvider::Zhipu => std::env::var("ZHIPU_API_KEY").ok(),
             ModelProvider::Anthropic => std::env::var("ANTHROPIC_API_KEY").ok(),
             ModelProvider::OpenAI => std::env::var("OPENAI_API_KEY").ok(),
@@ -119,6 +129,8 @@ impl AgentConfig {
         };
 
         let endpoint = match provider {
+            ModelProvider::DeepSeek => Some("https://api.deepseek.com".to_string()),
+            ModelProvider::Moonshot => Some("https://api.moonshot.cn/v1".to_string()),
             ModelProvider::Zhipu => Some("https://open.bigmodel.cn/api/paas/v4/".to_string()),
             _ => std::env::var("MODEL_ENDPOINT").ok(),
         };

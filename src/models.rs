@@ -141,38 +141,44 @@ impl LlmModel {
     }
 
     /// Create llm-connector client based on provider
+    ///
+    /// Note: llm-connector is protocol-based, not provider-based.
+    /// Most providers (Zhipu, DeepSeek, Moonshot, etc.) use OpenAI-compatible protocol.
+    ///
+    /// For custom endpoints, set OPENAI_API_BASE environment variable before creating client.
     fn create_client(config: &ModelConfig) -> Result<LlmClient, ModelError> {
+        let api_key = config.api_key.as_ref()
+            .ok_or_else(|| ModelError::ConfigError("API key required".into()))?;
+
+        // Set custom endpoint via environment variable if provided
+        // This is the standard way to use custom OpenAI-compatible endpoints
+        if let Some(endpoint) = &config.endpoint {
+            std::env::set_var("OPENAI_API_BASE", endpoint);
+        }
+
         match &config.provider {
-            ModelProvider::OpenAI => {
-                let api_key = config.api_key.as_ref()
-                    .ok_or_else(|| ModelError::ConfigError("OpenAI API key required".into()))?;
-                Ok(LlmClient::openai(api_key))
-            }
             ModelProvider::Anthropic => {
-                let api_key = config.api_key.as_ref()
-                    .ok_or_else(|| ModelError::ConfigError("Anthropic API key required".into()))?;
+                // Anthropic uses its own protocol
                 Ok(LlmClient::anthropic(api_key))
             }
-            ModelProvider::Zhipu => {
-                let api_key = config.api_key.as_ref()
-                    .ok_or_else(|| ModelError::ConfigError("Zhipu API key required".into()))?;
-                // Zhipu uses OpenAI-compatible API
-                Ok(LlmClient::openai(api_key))
-            }
             ModelProvider::Local(endpoint) => {
+                // Local Ollama
                 Ok(LlmClient::ollama_at(endpoint))
+            }
+            // All OpenAI-compatible providers (OpenAI, Zhipu, DeepSeek, Moonshot, etc.)
+            _ => {
+                // Use OpenAI protocol (works with any OpenAI-compatible API)
+                Ok(LlmClient::openai(api_key))
             }
         }
     }
 
-    /// Format model name with provider prefix for llm-connector
+    /// Format model name for llm-connector
+    ///
+    /// llm-connector uses the model name directly, not with provider prefix.
+    /// The protocol is determined by the client type, not the model name.
     fn format_model_name(&self) -> String {
-        match &self.config.provider {
-            ModelProvider::OpenAI => format!("openai/{}", self.config.model_name),
-            ModelProvider::Anthropic => format!("anthropic/{}", self.config.model_name),
-            ModelProvider::Zhipu => format!("zhipu/{}", self.config.model_name),
-            ModelProvider::Local(_) => self.config.model_name.clone(),
-        }
+        self.config.model_name.clone()
     }
 
     /// Convert llm-connector response to our ModelResponse

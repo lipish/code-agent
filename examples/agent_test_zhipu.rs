@@ -60,7 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
     println!("🧪 Agent Testing with Zhipu AI\n");
-    println!("{}", "=".repeat(80));
+    println!("{}", "=".to_string().repeat(80));
 
     // Load API key from keys.yaml
     let keys_content = fs::read_to_string("keys.yaml")?;
@@ -72,7 +72,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("📡 Provider: Zhipu AI");
     println!("🤖 Model: {}", model);
-    println!("{}", "=".repeat(80));
+    println!("{}", "=".to_string().repeat(80));
     println!();
 
     // Create model config
@@ -122,7 +122,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("   Agent Type: {}", test_case.agent_type);
         println!("   Task: {}", test_case.task);
         println!("   Expected: {}", test_case.expected_behavior);
-        println!("   {}", "-".repeat(76));
+        println!("   {}", "-".to_string().repeat(76));
 
         let start = Instant::now();
 
@@ -218,9 +218,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Print summary
     println!("\n\n");
-    println!("=" .repeat(80));
+    println!("=".to_string().repeat(80));
     println!("📊 Test Summary");
-    println!("=" .repeat(80));
+    println!("=".to_string().repeat(80));
     println!("Total Tests: {}", report.total_tests);
     println!("Passed: {} ✅", report.passed);
     println!("Failed: {} ❌", report.failed);
@@ -246,7 +246,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     println!();
     println!("📄 Full report saved to: agent_test_report.json");
-    println!("=" .repeat(80));
+    println!("=".to_string().repeat(80));
 
     Ok(())
 }
