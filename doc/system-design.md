@@ -1374,4 +1374,49 @@ See `REFACTORING_HISTORY.md` for details:
 - Clear module boundaries
 - Enhanced security
 - Better maintainability
+# 系统设计（统一架构）
+
+## 概述
+Task Runner 采用“单一通用 Agent + 配置驱动”架构，实现理解、规划、执行的一体化能力，并提供 CLI 与 HTTP 服务两种使用方式。
+
+## 架构总览
+- 用户接口：`src/cli.rs`（CLI）与 `src/server/main.rs`（HTTP 服务）。
+- 核心代理：`src/agent/{mod.rs, executor.rs, planner.rs}`。
+- 理解与规划：`src/planning/engine.rs`（模板/场景驱动分析）。
+- 执行引擎：`src/execution/{mod.rs, file_ops.rs, command_ops.rs}`。
+- 提示词工程：`src/prompts/{mod.rs, defaults.rs}` 与 `prompts/*.yaml`。
+- 工具系统：`src/tools.rs`（注册与执行）。
+- 安全机制：`src/security.rs`（命令与路径校验）。
+- 服务模块：`src/service/{core.rs, api.rs, metrics_simple.rs, mod.rs}`。
+
+## 设计原则
+- 通用性：不再区分多固定 Agent 类型，行为通过配置外置。
+- 可扩展性：模板、工具与安全策略可插拔。
+- 职责清晰：理解/规划/执行/工具/安全模块边界明确。
+
+## 配置驱动
+- 全局：系统角色、输出格式、约束。
+- 项目：技术栈、编码规范、上下文、架构。
+- 场景：任务类型的指令集与输出结构（如代码生成、重构、调试等）。
+
+## 任务处理流程（高层）
+1. 请求进入 CLI/HTTP 接口，交由服务层调度。
+2. `TaskAgent` 协调调用 `PlanningEngine` 进行任务理解与方案生成。
+3. `TaskExecutor` 根据计划选择动作：使用工具、继续思考或完成任务。
+4. 工具调用通过 `ToolRegistry` 执行并进行安全校验。
+5. 汇总结果与指标并返回给调用方。
+
+## 部署与运行
+- CLI：`cargo run --bin task-runner` 或执行示例。
+- HTTP 服务：`src/server/main.rs` 提供 REST 端点（见 `doc/service_api.md`）。
+- 配置文件：`config.toml` 与 `prompts/*.yaml`。
+
+## 模块关系图（简化）
+```
+CLI / HTTP → Service → TaskAgent → PlanningEngine → TaskExecutor → ToolRegistry → Security
+```
+
+## 参考
+- `doc/agent-workflow.md`：详细工作流说明
+- `doc/service_api.md`：服务端点与数据结构
 

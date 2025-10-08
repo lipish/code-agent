@@ -1,13 +1,15 @@
-//! Agent Types Demo
+//! Agent Types Demo (Legacy)
 //!
-//! This example demonstrates the different agent types available
-//! and how to use them for specialized tasks.
+//! This example demonstrates the older "multiple fixed agent types" approach.
+//! The project now recommends a single generic Agent configured via YAML templates.
+//!
+//! Prefer: `examples/config_driven_agent.rs` for the configuration-driven design.
 
 use task_runner::prompts::{AgentType, PromptBuilder, PromptTemplate, global_template_for_agent};
 
 fn main() {
-    println!("=== Agent Types Demo ===\n");
-    println!("Task Runner supports multiple specialized agent types:\n");
+    println!("=== Agent Types Demo (Legacy) ===\n");
+    println!("Note: Prefer config-driven templates (see config_driven_agent.rs).\n");
 
     // Show all available agent types
     println!("📋 Available Agent Types:\n");
