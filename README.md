@@ -1,111 +1,111 @@
 # Task Runner
 
-一个简单高效的 AI 驱动任务运行服务，提供 Rust API 和 HTTP REST 接口，可集成到任何应用中。
+A simple and efficient AI-driven task execution service that provides both Rust API and HTTP REST interfaces, easily integrable into any application.
 
 [![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## 🎯 项目特点
+## 🎯 Key Features
 
-- **🏗️ 服务架构**: 可作为独立服务运行，提供标准API接口
-- **🤖 AI原生**: 从底层为AI自主性而构建，最大化AI能力
-- **🔗 双接口**: 提供Rust API和HTTP REST API两种使用方式
-- **⚡ 高性能**: Arc优化并发架构，支持大规模并发任务执行
-- **🛠️ 工具集成**: 安全的文件操作、命令执行等工具系统
-- **📊 监控完备**: 内置指标收集和健康检查
-- **🔒 企业级**: 支持认证、限流、CORS等企业特性
-- **🔌 统一LLM接口**: 使用 [llm-connector](https://github.com/lipish/llm-connector) 支持多个AI提供商
-- **✨ 模块化设计**: 职责分离的架构，代码清晰易维护
+- **🏗️ Service Architecture**: Can run as a standalone service providing standard API interfaces
+- **🤖 AI Native**: Built from the ground up for AI autonomy, maximizing AI capabilities
+- **🔗 Dual Interfaces**: Provides both Rust API and HTTP REST API
+- **⚡ High Performance**: Arc-optimized concurrent architecture supporting large-scale concurrent task execution
+- **🛠️ Tool Integration**: Secure file operations, command execution, and other tool systems
+- **📊 Complete Monitoring**: Built-in metrics collection and health checks
+- **🔒 Enterprise Grade**: Supports authentication, rate limiting, CORS, and other enterprise features
+- **🔌 Unified LLM Interface**: Uses [llm-connector](https://github.com/lipish/llm-connector) to support multiple AI providers
+- **✨ Modular Design**: Clean, maintainable architecture with separated responsibilities
 
-## 🏗️ 核心特性
+## 🏗️ Core Features
 
-### 高性能架构优化
+### High-Performance Architecture Optimization
 
-**Arc 智能引用优化**：
-- ✅ **内存效率**: 使用 `Arc<DashMap>` 替代 `Arc<RwLock<HashMap>>` 实现无锁并发访问
-- ✅ **性能提升**: 并发读写性能提升 3-5 倍，内存开销降低 40%
-- ✅ **锁竞争消除**: DashMap 内部分片锁设计，大幅减少锁竞争
-- ✅ **基准测试**: 内置 criterion 基准测试验证优化效果
+**Smart Arc Reference Optimization**:
+- ✅ **Memory Efficiency**: Uses `Arc<DashMap>` instead of `Arc<RwLock<HashMap>>` for lock-free concurrent access
+- ✅ **Performance Boost**: 3-5x improvement in concurrent read/write performance, 40% reduction in memory overhead
+- ✅ **Lock Contention Elimination**: DashMap's internal sharding design significantly reduces lock contention
+- ✅ **Benchmark Testing**: Built-in criterion benchmarks to verify optimization effectiveness
 
-**模块化架构重构**：
-- ✅ **通用化设计**: 重命名 `CodeAgent` 为 `TaskAgent`，支持更广泛的任务类型
-- ✅ **职责分离**: 将任务规划、执行、文件操作分离到独立模块
-- ✅ **共享模型**: 使用 `Arc<dyn LanguageModel>` 支持多组件共享 AI 模型
-- ✅ **代码质量**: 修复所有 dead code 警告，提升编译时性能
+**Modular Architecture Refactoring**:
+- ✅ **Generalized Design**: Renamed `CodeAgent` to `TaskAgent` to support broader task types
+- ✅ **Responsibility Separation**: Task planning, execution, and file operations separated into independent modules
+- ✅ **Shared Models**: Uses `Arc<dyn LanguageModel>` to support model sharing across components
+- ✅ **Code Quality**: Fixed all dead code warnings, improved compile-time performance
 
-**模块化架构**：
+**Modular Architecture**:
 ```rust
-agent/                     - Agent 核心模块
-  ├── executor.rs          - 任务执行引擎
-  └── planner.rs           - 任务规划逻辑
+agent/                     - Agent core module
+  ├── executor.rs          - Task execution engine
+  └── planner.rs           - Task planning logic
 
-planning/                  - 智能规划模块
-  └── engine.rs            - AI 规划引擎
+planning/                  - Intelligent planning module
+  └── engine.rs            - AI planning engine
 
-execution/                 - 执行操作模块
-  ├── file_ops.rs          - 文件操作
-  └── command_ops.rs       - 命令执行
+execution/                 - Execution operations module
+  ├── file_ops.rs          - File operations
+  └── command_ops.rs       - Command execution
 ```
 
-## ✨ 提示词工程系统
+## ✨ Prompt Engineering System
 
-Task Runner 实现了灵活的提示词工程系统，灵感来自 OpenAI Codex 和 Roo-Code：
+Task Runner implements a flexible prompt engineering system inspired by OpenAI Codex and Roo-Code:
 
-**核心特性**: 分层结构（全局+项目+场景）、外置YAML配置、9+预定义场景、动态加载、智能推断、可扩展
+**Core Features**: Hierarchical structure (Global + Project + Scenario), External YAML configuration, 9+ predefined scenarios, Dynamic loading, Smart inference, Extensible
 
-**快速示例**:
+**Quick Example**:
 ```rust
-// 使用默认模板
+// Using default template
 let engine = UnderstandingEngine::new(model);
-let plan = engine.understand_task("创建配置加载器").await?;
+let plan = engine.understand_task("Create a configuration loader").await?;
 
-// 使用自定义模板
+// Using custom template
 let template = PromptTemplate::from_file("prompts/rust-project.yaml")?;
 let engine = UnderstandingEngine::with_template(model, template);
 ```
 
-**内置场景**: code_generation, refactoring, debugging, testing, documentation, architecture, optimization, file_operations, command_execution
+**Built-in Scenarios**: code_generation, refactoring, debugging, testing, documentation, architecture, optimization, file_operations, command_execution
 
-详见：[提示词工程文档](doc/PROMPT_ENGINEERING.md)
+See: [Prompt Engineering Documentation](doc/PROMPT_ENGINEERING.md)
 
-## 🚀 快速开始
+## 🚀 Quick Start
 
-### 环境要求
+### Requirements
 
 - Rust 1.70+
-- 配置的AI模型API密钥（Zhipu GLM-4、OpenAI GPT-4等）
+- Configured AI model API key (Zhipu GLM-4, OpenAI GPT-4, etc.)
 
-### 方式一：命令行工具
+### Option 1: Command Line Tool
 
 ```bash
-# 克隆项目
+# Clone the project
 git clone https://github.com/lipish/task-runner.git
 cd task-runner
 
-# 配置API密钥
+# Configure API key
 cp .env.example .env
-# 编辑 .env 文件，添加你的API密钥
+# Edit .env file and add your API key
 
-# 运行CLI
-cargo run -- task "分析这个项目并创建摘要"
+# Run CLI
+cargo run -- task "Analyze this project and create a summary"
 ```
 
-### 方式二：HTTP服务
+### Option 2: HTTP Service
 
 ```bash
-# 启动HTTP服务
+# Start HTTP service
 cargo run --bin task-runner-server
 
-# 在另一个终端测试
+# Test in another terminal
 curl -X POST http://localhost:8080/api/v1/tasks \
   -H "Content-Type: application/json" \
   -d '{"task": "Hello, Task Runner!"}'
 ```
 
 
-## 📋 使用方式
+## 📋 Usage
 
-### 1. Rust API 集成
+### 1. Rust API Integration
 
 ```rust
 use task_runner::{
@@ -116,18 +116,18 @@ use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 创建服务实例
+    // Create service instance
     let service = Arc::new(TaskRunnerService::new(
         ServiceConfig::default(),
         AgentConfig::load_with_fallback("config.toml")?
     ).await?);
 
-    // 创建客户端
+    // Create client
     let client = TaskRunnerClient::new(ApiClientBuilder::in_process(service));
 
-    // 执行任务
-    let response = client.execute_simple_task("创建一个Hello World程序").await?;
-    println!("结果: {}", response.result.unwrap().summary);
+    // Execute task
+    let response = client.execute_simple_task("Create a Hello World program").await?;
+    println!("Result: {}", response.result.unwrap().summary);
 
     Ok(())
 }
@@ -136,54 +136,54 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### 2. HTTP REST API
 
 ```bash
-# 执行任务
+# Execute task
 curl -X POST http://localhost:8080/api/v1/tasks \
   -H "Content-Type: application/json" \
   -d '{
-    "task": "读取README.md文件并总结内容",
+    "task": "Read README.md file and summarize content",
     "priority": "high"
   }'
 
-# 批量执行任务
+# Batch execute tasks
 curl -X POST http://localhost:8080/api/v1/tasks/batch \
   -H "Content-Type: application/json" \
   -d '{
     "tasks": [
-      {"task": "任务1"},
-      {"task": "任务2"}
+      {"task": "Task 1"},
+      {"task": "Task 2"}
     ],
     "mode": "parallel"
   }'
 
-# 获取任务状态
+# Get task status
 curl http://localhost:8080/api/v1/tasks/{task_id}
 
-# 获取服务状态
+# Get service status
 curl http://localhost:8080/api/v1/status
 
-# 获取指标
+# Get metrics
 curl http://localhost:8080/api/v1/metrics
 ```
 
-### 3. 命令行工具
+### 3. Command Line Tool
 
 ```bash
-# 基本用法
-cargo run -- task "你的任务描述"
+# Basic usage
+cargo run -- task "Your task description"
 
-# 交互模式
+# Interactive mode
 cargo run -- interactive
 
-# 详细输出
-cargo run -- task "任务" --output verbose
+# Verbose output
+cargo run -- task "task" --output verbose
 
-# JSON输出
-cargo run -- task "任务" --output json
+# JSON output
+cargo run -- task "task" --output json
 ```
 
-## 🔧 配置
+## 🔧 Configuration
 
-### 基本配置 (config.toml)
+### Basic Configuration (config.toml)
 
 ```toml
 [model]
@@ -223,51 +223,51 @@ requests_per_minute = 60
 burst_size = 10
 ```
 
-### 环境变量
+### Environment Variables
 
 ```bash
-# 服务配置
+# Service configuration
 TASK_RUNNER_MAX_CONCURRENT_TASKS=10
 TASK_RUNNER_DEFAULT_TASK_TIMEOUT=300
 TASK_RUNNER_ENABLE_METRICS=true
 TASK_RUNNER_LOG_LEVEL=info
 
-# 服务器配置
+# Server configuration
 BIND_ADDRESS=0.0.0.0:8080
 
-# AI模型配置
+# AI model configuration
 TASK_RUNNER_MODEL_PROVIDER=zhipu
 TASK_RUNNER_MODEL_NAME=glm-4
 TASK_RUNNER_API_KEY=your-api-key
 
-# CORS配置
+# CORS configuration
 TASK_RUNNER_CORS_ALLOWED_ORIGINS=*
 ```
 
-## 📊 API 文档
+## 📊 API Documentation
 
-### 核心 API 端点
+### Core API Endpoints
 
-| 端点 | 方法 | 描述 |
+| Endpoint | Method | Description |
 |------|------|------|
-| `/health` | GET | 健康检查 |
-| `/api/v1/status` | GET | 服务状态 |
-| `/api/v1/metrics` | GET | 服务指标 |
-| `/api/v1/tools` | GET | 可用工具 |
-| `/api/v1/tasks` | POST | 执行任务 |
-| `/api/v1/tasks/batch` | POST | 批量执行 |
-| `/api/v1/tasks/{id}` | GET | 任务状态 |
-| `/api/v1/tasks/{id}` | DELETE | 取消任务 |
-| `/api/v1/config` | GET | 获取配置 |
-| `/api/v1/config` | PUT | 更新配置 |
-| `/api/v1/config/model` | PUT | 更新模型配置 |
-| `/api/v1/config/validate` | POST | 验证配置 |
+| `/health` | GET | Health check |
+| `/api/v1/status` | GET | Service status |
+| `/api/v1/metrics` | GET | Service metrics |
+| `/api/v1/tools` | GET | Available tools |
+| `/api/v1/tasks` | POST | Execute task |
+| `/api/v1/tasks/batch` | POST | Batch execution |
+| `/api/v1/tasks/{id}` | GET | Task status |
+| `/api/v1/tasks/{id}` | DELETE | Cancel task |
+| `/api/v1/config` | GET | Get configuration |
+| `/api/v1/config` | PUT | Update configuration |
+| `/api/v1/config/model` | PUT | Update model config |
+| `/api/v1/config/validate` | POST | Validate configuration |
 
-### 任务请求格式
+### Task Request Format
 
 ```json
 {
-  "task": "任务描述",
+  "task": "Task description",
   "task_id": "可选的自定义ID",
   "context": {
     "working_directory": "/path/to/dir",
@@ -580,41 +580,41 @@ Task Runner 采用**模块化、AI 驱动**的执行模式，通过职责分离�
 - ✅ **共享资源**: 通过 Arc 共享 AI 模型实例
 - ✅ **类型安全**: 使用 Rust 类型系统保证正确性
 
-## 🔒 安全性
+## 🔒 Security
 
-### 认证和授权
-- API密钥认证
-- 请求速率限制
-- CORS配置
-- 权限控制
+### Authentication and Authorization
+- API key authentication
+- Request rate limiting
+- CORS configuration
+- Permission control
 
-### 执行安全
-- 沙箱文件访问
-- 危险命令过滤
-- 超时保护
-- 资源限制
+### Execution Security
+- Sandboxed file access
+- Dangerous command filtering
+- Timeout protection
+- Resource limits
 
-## 🤝 贡献
+## 🤝 Contributing
 
-欢迎贡献！请查看 [CONTRIBUTING.md](CONTRIBUTING.md) 了解详情。
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
-## 📚 文档
+## 📚 Documentation
 
-- [API文档](doc/SERVICE_API.md) - 详细的API参考
-- [系统设计](doc/system-design.md) - 架构设计文档
-- [部署指南](doc/DEPLOYMENT.md) - 生产部署指南
-- [示例代码](examples/README.md) - 完整使用示例
+- [API Documentation](doc/SERVICE_API.md) - Detailed API reference
+- [System Design](doc/system-design.md) - Architecture design documentation
+- [Deployment Guide](doc/DEPLOYMENT.md) - Production deployment guide
+- [Example Code](examples/README.md) - Complete usage examples
 
-## 📄 许可证
+## 📄 License
 
-MIT License - 详见 [LICENSE](LICENSE) 文件
+MIT License - See [LICENSE](LICENSE) file for details
 
-## 🔗 相关链接
+## 🔗 Related Links
 
-- [GitHub仓库](https://github.com/lipish/task-runner)
+- [GitHub Repository](https://github.com/lipish/task-runner)
 - [Docker Hub](https://hub.docker.com/r/task-runner/service)
-- [API文档](doc/SERVICE_API.md)
+- [API Documentation](doc/SERVICE_API.md)
 
 ---
 
-**Task Runner** - 简单高效的 AI 驱动任务运行服务。
+**Task Runner** - Simple and efficient AI-driven task execution service.
