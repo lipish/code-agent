@@ -44,12 +44,7 @@ pub struct TaskAgent {
     _error_handler: crate::errors::ErrorHandler,
 }
 
-/// Type alias for backward compatibility
-///
-/// `CodeAgent` is deprecated in favor of the more general `TaskAgent`.
-/// This alias will be removed in a future version.
-#[deprecated(since = "0.2.1", note = "Use `TaskAgent` instead for better generality")]
-pub type CodeAgent = TaskAgent;
+
 
 impl std::fmt::Debug for TaskAgent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

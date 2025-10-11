@@ -19,12 +19,12 @@ use tower_http::{
 use tracing::{info, warn, error};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use task_runner::service::{CodeAgentService, ServiceConfig, TaskRequest, BatchTaskRequest, TaskResponse, BatchTaskResponse, ServiceStatus, MetricsSnapshot, ServiceError};
+use task_runner::service::{TaskAgentService, ServiceConfig, TaskRequest, BatchTaskRequest, TaskResponse, BatchTaskResponse, ServiceStatus, MetricsSnapshot, ServiceError};
 use task_runner::config::AgentConfig;
 
 #[derive(Clone)]
 struct AppState {
-    service: Arc<CodeAgentService>,
+    service: Arc<TaskAgentService>,
     config: Arc<tokio::sync::RwLock<AgentConfig>>,
 }
 
@@ -85,7 +85,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Create service
     let config = Arc::new(tokio::sync::RwLock::new(agent_config.clone()));
-    let service = Arc::new(CodeAgentService::new(service_config.clone(), agent_config).await?);
+    let service = Arc::new(TaskAgentService::new(service_config.clone(), agent_config).await?);
 
     // Create router
     let app = create_router(service.clone(), config.clone(), service_config.clone());
@@ -104,7 +104,7 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn create_router(service: Arc<CodeAgentService>, config: Arc<tokio::sync::RwLock<AgentConfig>>, service_config: ServiceConfig) -> Router {
+fn create_router(service: Arc<TaskAgentService>, config: Arc<tokio::sync::RwLock<AgentConfig>>, service_config: ServiceConfig) -> Router {
     let state = AppState { service, config };
 
     Router::new()

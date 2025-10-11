@@ -27,7 +27,7 @@ use crate::service::metrics_simple::{MetricsCollector, MetricsSnapshot};
 ///
 /// A general-purpose service for executing various types of tasks through AI agents.
 #[derive(Debug)]
-pub struct CodeAgentService {
+pub struct TaskAgentService {
     /// Service configuration
     config: ServiceConfig,
     /// Metrics collector
@@ -64,7 +64,7 @@ struct TaskContext {
     current_step: u32,
 }
 
-impl CodeAgentService {
+impl TaskAgentService {
     /// Create a new service instance
     pub async fn new(config: ServiceConfig, agent_config: AgentConfig) -> ServiceResult<Self> {
         info!("Creating AI Agent Service with config: {:?}", config);

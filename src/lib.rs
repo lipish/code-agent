@@ -37,11 +37,6 @@ pub mod cli;
 
 // Re-export main types and functions for convenience
 pub use agent::TaskAgent;
-
-// Re-export deprecated alias (allow deprecated warning for the export itself)
-#[allow(deprecated)]
-pub use agent::CodeAgent; // Deprecated: Use TaskAgent instead
-
 pub use config::AgentConfig;
 pub use models::LanguageModel;
 pub use tools::Tool;
@@ -67,6 +62,6 @@ pub use service::types::{
 
 #[cfg(feature = "service")]
 pub use service::{
-    CodeAgentService, CodeAgentApi, CodeAgentClient, ApiClientBuilder, ServiceResult,
+    TaskAgentService, TaskAgentApi, TaskAgentClient, ApiClientBuilder, ServiceResult,
     MetricsSnapshot,
 };

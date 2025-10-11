@@ -113,7 +113,7 @@ The central service component that coordinates all operations and provides both 
 pub struct AiAgentService {
     config: ServiceConfig,
     metrics: Arc<MetricsCollector>,
-    agent: Arc<RwLock<CodeAgent>>,
+    agent: Arc<RwLock<TaskAgent>>,
     active_tasks: Arc<RwLock<HashMap<String, Arc<RwLock<TaskContext>>>>,
     task_semaphore: Arc<Semaphore>,
     available_tools: Vec<String>,
@@ -966,7 +966,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // 3. Create Agent
-    let mut agent = CodeAgent::new(model, config)?;
+    let mut agent = TaskAgent::new(model, config)?;
 
     // 4. Register tools
     agent.register_tool(ReadFileTool).await;
@@ -1015,7 +1015,7 @@ impl Tool for GitStatusTool {
 }
 
 // Use custom tools
-let mut agent = CodeAgent::new(model, config)?;
+let mut agent = TaskAgent::new(model, config)?;
 agent.register_tool(GitStatusTool).await;
 ```
 
@@ -1135,7 +1135,7 @@ src/
 ├── tools.rs                # Tool system and implementations
 ├── understanding.rs        # Understanding engine
 ├── execution.rs           # Execution engine
-├── agent.rs                # Main CodeAgent
+├── agent.rs                # Main TaskAgent
 ├── cli.rs                  # CLI interface
 ├── service_types.rs        # Service API data types
 └── service/

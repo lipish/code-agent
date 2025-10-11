@@ -11,12 +11,12 @@ use crate::service::types::{
     ServiceStatus, WebSocketMessage, TaskContext, BatchExecutionMode,
     ServiceError,
 };
-use crate::service::{ServiceResult, CodeAgentService, MetricsSnapshot};
+use crate::service::{ServiceResult, TaskAgentService, MetricsSnapshot};
 use crate::service::error::ErrorBuilder;
 
 /// Main API trait for Code Agent Service
 #[async_trait::async_trait]
-pub trait CodeAgentApi: Send + Sync {
+pub trait TaskAgentApi: Send + Sync {
     /// Execute a single task
     async fn execute_task(&self, request: TaskRequest) -> ServiceResult<TaskResponse>;
 
@@ -41,18 +41,18 @@ pub trait CodeAgentApi: Send + Sync {
 
 /// In-process API implementation
 pub struct InProcessApi {
-    service: Arc<CodeAgentService>,
+    service: Arc<TaskAgentService>,
 }
 
 impl InProcessApi {
     /// Create a new in-process API
-    pub fn new(service: Arc<CodeAgentService>) -> Self {
+    pub fn new(service: Arc<TaskAgentService>) -> Self {
         Self { service }
     }
 }
 
 #[async_trait::async_trait]
-impl CodeAgentApi for InProcessApi {
+impl TaskAgentApi for InProcessApi {
     async fn execute_task(&self, request: TaskRequest) -> ServiceResult<TaskResponse> {
         self.service.execute_task(request).await
     }
@@ -149,7 +149,7 @@ impl HttpClientApi {
 }
 
 #[async_trait::async_trait]
-impl CodeAgentApi for HttpClientApi {
+impl TaskAgentApi for HttpClientApi {
     async fn execute_task(&self, request: TaskRequest) -> ServiceResult<TaskResponse> {
         let request_builder = self.build_request(reqwest::Method::POST, "/tasks").await?;
         let response = request_builder.json(&request).send().await
@@ -214,7 +214,7 @@ pub struct ApiClientBuilder;
 
 impl ApiClientBuilder {
     /// Create an in-process API client
-    pub fn in_process(service: Arc<CodeAgentService>) -> Box<dyn CodeAgentApi> {
+    pub fn in_process(service: Arc<TaskAgentService>) -> Box<dyn TaskAgentApi> {
         Box::new(InProcessApi::new(service))
     }
 
@@ -229,7 +229,7 @@ impl ApiClientBuilder {
     }
 
     /// Create a client from environment configuration
-    pub fn from_env() -> ServiceResult<Box<dyn CodeAgentApi>> {
+    pub fn from_env() -> ServiceResult<Box<dyn TaskAgentApi>> {
         let base_url = std::env::var("CODE_AGENT_API_URL")
             .unwrap_or_else(|_| "http://localhost:8080".to_string());
 
@@ -244,13 +244,13 @@ impl ApiClientBuilder {
 }
 
 /// Simple client wrapper for convenient usage
-pub struct CodeAgentClient {
-    api: Box<dyn CodeAgentApi>,
+pub struct TaskAgentClient {
+    api: Box<dyn TaskAgentApi>,
 }
 
-impl CodeAgentClient {
+impl TaskAgentClient {
     /// Create a new client
-    pub fn new(api: Box<dyn CodeAgentApi>) -> Self {
+    pub fn new(api: Box<dyn TaskAgentApi>) -> Self {
         Self { api }
     }
 
@@ -291,13 +291,13 @@ impl CodeAgentClient {
     }
 
     /// Get a reference to the underlying API
-    pub fn api(&self) -> &dyn CodeAgentApi {
+    pub fn api(&self) -> &dyn TaskAgentApi {
         self.api.as_ref()
     }
 }
 
-impl std::ops::Deref for CodeAgentClient {
-    type Target = dyn CodeAgentApi;
+impl std::ops::Deref for TaskAgentClient {
+    type Target = dyn TaskAgentApi;
 
     fn deref(&self) -> &Self::Target {
         self.api.as_ref()
@@ -312,7 +312,7 @@ pub mod examples {
     pub async fn in_process_example() -> ServiceResult<()> {
         // This would typically be created from the service
         // let service = Arc::new(AiAgentService::new(service_config, agent_config).await?);
-        // let client = CodeAgentClient::new(ApiClientBuilder::in_process(service));
+        // let client = TaskAgentClient::new(ApiClientBuilder::in_process(service));
 
         // Execute a simple task
         // let response = client.execute_simple_task("Read the README.md file and summarize it").await?;
@@ -323,7 +323,7 @@ pub mod examples {
 
     /// Example of using the HTTP API
     pub async fn http_example() -> ServiceResult<()> {
-        let client = CodeAgentClient::new(
+        let client = TaskAgentClient::new(
             Box::new(ApiClientBuilder::http_with_auth("http://localhost:8080", "your-api-key"))
         );
 
@@ -340,7 +340,7 @@ pub mod examples {
 
     /// Example of batch processing
     pub async fn batch_example() -> ServiceResult<()> {
-        let client = CodeAgentClient::new(ApiClientBuilder::from_env()?);
+        let client = TaskAgentClient::new(ApiClientBuilder::from_env()?);
 
         let batch_request = BatchTaskRequest {
             tasks: vec![
