@@ -1,5 +1,6 @@
 ---
-trigger: manual
+trigger: always_on
+alwaysApply: true
 ---
 1.永远用中文回复
 2.回复聚焦于核心问题，不要在回复中加入额外的信息

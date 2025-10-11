@@ -33,6 +33,12 @@ pub enum ModelProvider {
     Zhipu,
     DeepSeek,
     Moonshot,
+    Aliyun,
+    LongCat,
+    VolcEngine,
+    Ollama,
+    Xinference,
+    // Generic local server with custom endpoint
     Local(String),
 }
 
@@ -116,6 +122,11 @@ impl AgentConfig {
             ModelProvider::Moonshot => "moonshot-v1-8k",
             ModelProvider::Zhipu => "GLM-4.6",
             ModelProvider::Anthropic => "claude-3-sonnet-20240229",
+            ModelProvider::Aliyun => "qwen3-max",
+            ModelProvider::LongCat => "LongCat-Flash-Chat",
+            ModelProvider::VolcEngine => "ep-20241008150227-6k2gt",
+            ModelProvider::Ollama => "llama2",
+            ModelProvider::Xinference => "qwen-chat",
             _ => "gpt-4-turbo-preview",
         };
 
@@ -125,13 +136,23 @@ impl AgentConfig {
             ModelProvider::Zhipu => std::env::var("ZHIPU_API_KEY").ok(),
             ModelProvider::Anthropic => std::env::var("ANTHROPIC_API_KEY").ok(),
             ModelProvider::OpenAI => std::env::var("OPENAI_API_KEY").ok(),
+            ModelProvider::Aliyun => std::env::var("ALIYUN_API_KEY").ok(),
+            ModelProvider::LongCat => std::env::var("LONGCAT_API_KEY").ok(),
+            ModelProvider::VolcEngine => std::env::var("VOLCENGINE_API_KEY").ok(),
+            ModelProvider::Ollama => None, // Ollama typically doesn't require API key
+            ModelProvider::Xinference => std::env::var("XINFERENCE_API_KEY").ok(),
             ModelProvider::Local(_) => std::env::var("API_KEY").ok(),
         };
 
         let endpoint = match provider {
-            ModelProvider::DeepSeek => Some("https://api.deepseek.com".to_string()),
+            ModelProvider::DeepSeek => Some("https://api.deepseek.com/v1".to_string()),
             ModelProvider::Moonshot => Some("https://api.moonshot.cn/v1".to_string()),
-            ModelProvider::Zhipu => Some("https://open.bigmodel.cn/api/paas/v4/".to_string()),
+            ModelProvider::Zhipu => Some("https://open.bigmodel.cn/api/paas/v4".to_string()),
+            ModelProvider::Aliyun => Some("https://dashscope.aliyuncs.com/compatible-mode/v1".to_string()),
+            ModelProvider::LongCat => Some("https://api.longcat.chat/openai".to_string()),
+            ModelProvider::VolcEngine => Some("https://ark.cn-beijing.volces.com/api/v3".to_string()),  // Note: Endpoint ID should be configured separately
+            ModelProvider::Ollama => Some("http://localhost:11434".to_string()),
+            ModelProvider::Xinference => Some("http://localhost:9997/v1".to_string()),
             _ => std::env::var("MODEL_ENDPOINT").ok(),
         };
 

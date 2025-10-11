@@ -267,58 +267,109 @@ impl PlanningEngine {
 
     /// Parse the AI response into a structured task plan
     fn parse_task_plan(&self, response: &str) -> Result<TaskPlan, AgentError> {
+        // 在verbose模式下打印原始响应用于调试
+        if self.config.verbose {
+            println!("🤖 LLM原始响应:");
+            println!("{}", "=" .repeat(80));
+            println!("{}", response);
+            println!("{}", "=" .repeat(80));
+        }
+        
         let mut understanding = String::new();
         let mut approach = String::new();
         let mut complexity = TaskComplexity::Moderate;
         let mut requirements = Vec::new();
-
-        for line in response.lines() {
-            let line = line.trim();
-            if line.to_uppercase().starts_with("UNDERSTANDING:") {
-                understanding = line
-                    .strip_prefix("UNDERSTANDING:")
-                    .or_else(|| line.strip_prefix("understanding:"))
-                    .unwrap_or("")
-                    .trim()
-                    .to_string();
-            } else if line.to_uppercase().starts_with("APPROACH:") {
-                approach = line
-                    .strip_prefix("APPROACH:")
-                    .or_else(|| line.strip_prefix("approach:"))
-                    .unwrap_or("")
-                    .trim()
-                    .to_string();
-            } else if line.to_uppercase().starts_with("COMPLEXITY:") {
-                let complexity_str = line
-                    .strip_prefix("COMPLEXITY:")
-                    .or_else(|| line.strip_prefix("complexity:"))
-                    .unwrap_or("")
-                    .trim()
-                    .to_uppercase();
-                
+        
+        let lines: Vec<&str> = response.lines().collect();
+        let mut i = 0;
+        
+        while i < lines.len() {
+            let line = lines[i].trim();
+            
+            // 处理 **UNDERSTANDING**: 格式
+            if line.to_uppercase().starts_with("**UNDERSTANDING**:") || line.to_uppercase().starts_with("UNDERSTANDING:") {
+                understanding = self.extract_field_content_enhanced(line, "**UNDERSTANDING**:", "UNDERSTANDING:");
+                // 处理多行内容
+                i += 1;
+                while i < lines.len() && !self.is_new_field_enhanced(lines[i]) {
+                    let continuation = lines[i].trim();
+                    if !continuation.is_empty() {
+                        if !understanding.is_empty() && !understanding.ends_with(' ') {
+                            understanding.push(' ');
+                        }
+                        understanding.push_str(continuation);
+                    }
+                    i += 1;
+                }
+                continue;
+            } 
+            // 处理 **APPROACH**: 格式
+            else if line.to_uppercase().starts_with("**APPROACH**:") || line.to_uppercase().starts_with("APPROACH:") {
+                approach = self.extract_field_content_enhanced(line, "**APPROACH**:", "APPROACH:");
+                // 处理多行内容
+                i += 1;
+                while i < lines.len() && !self.is_new_field_enhanced(lines[i]) {
+                    let continuation = lines[i].trim();
+                    if !continuation.is_empty() {
+                        if !approach.is_empty() && !approach.ends_with(' ') {
+                            approach.push(' ');
+                        }
+                        approach.push_str(continuation);
+                    }
+                    i += 1;
+                }
+                continue;
+            }
+            // 处理 **PLAN**: 格式 (作为 REQUIREMENTS)
+            else if line.to_uppercase().starts_with("**PLAN**:") || line.to_uppercase().starts_with("PLAN:") || 
+                    line.to_uppercase().starts_with("**REQUIREMENTS**:") || line.to_uppercase().starts_with("REQUIREMENTS:") {
+                // 处理多行的requirements/plan
+                i += 1;
+                while i < lines.len() && !self.is_new_field_enhanced(lines[i]) {
+                    let req_line = lines[i].trim();
+                    if !req_line.is_empty() {
+                        // 处理编号列表格式（如 "1. 需求内容"）
+                        let cleaned_req = if req_line.chars().next().map_or(false, |c| c.is_ascii_digit()) {
+                            // 移除前缀数字和点
+                            req_line.split_once('.').map(|(_, rest)| rest.trim()).unwrap_or(req_line)
+                        } else if req_line.starts_with('-') || req_line.starts_with('*') {
+                            // 移除项目符号
+                            &req_line[1..].trim()
+                        } else {
+                            req_line
+                        };
+                        
+                        if !cleaned_req.is_empty() && cleaned_req != "None" {
+                            requirements.push(cleaned_req.to_string());
+                        }
+                    }
+                    i += 1;
+                }
+                continue;
+            }
+            // 处理复杂度
+            else if line.to_uppercase().starts_with("**COMPLEXITY**:") || line.to_uppercase().starts_with("COMPLEXITY:") {
+                let complexity_str = self.extract_field_content_enhanced(line, "**COMPLEXITY**:", "COMPLEXITY:").to_uppercase();
                 complexity = match complexity_str.as_str() {
                     "SIMPLE" => TaskComplexity::Simple,
                     "COMPLEX" => TaskComplexity::Complex,
                     _ => TaskComplexity::Moderate,
                 };
-            } else if line.to_uppercase().starts_with("REQUIREMENTS:") {
-                let req_text = line
-                    .strip_prefix("REQUIREMENTS:")
-                    .or_else(|| line.strip_prefix("requirements:"))
-                    .unwrap_or("")
-                    .trim();
-                
-                if req_text != "None" && !req_text.is_empty() {
-                    requirements = req_text
-                        .split(',')
-                        .map(|s| s.trim().to_string())
-                        .filter(|s| !s.is_empty())
-                        .collect();
-                }
             }
+            
+            i += 1;
+        }
+        
+        // 从内容智能推断复杂度
+        if approach.len() > 200 || understanding.len() > 150 || requirements.len() > 10 {
+            complexity = TaskComplexity::Complex;
+        } else if approach.len() > 100 || understanding.len() > 80 || requirements.len() > 5 {
+            complexity = TaskComplexity::Moderate;
+        } else {
+            complexity = TaskComplexity::Simple;
         }
 
-        // Validate that we got at least some understanding
+        // 验证并设置默认值
         if understanding.is_empty() {
             understanding = "Task analysis in progress".to_string();
         }
@@ -332,6 +383,14 @@ impl PlanningEngine {
             TaskComplexity::Complex => 10,
         };
 
+        if self.config.verbose {
+            println!("🔍 解析结果预览:");
+            println!("   Understanding: {} (长度: {})", understanding, understanding.len());
+            println!("   Approach: {} (长度: {})", approach, approach.len());
+            println!("   Requirements: {} 项", requirements.len());
+            println!("   Complexity: {:?}", complexity);
+        }
+
         Ok(TaskPlan {
             understanding,
             approach,
@@ -339,6 +398,24 @@ impl PlanningEngine {
             estimated_steps: Some(estimated_steps),
             requirements,
         })
+    }
+    
+    /// 提取字段内容
+    fn extract_field_content(&self, line: &str, field_name: &str) -> String {
+        line.strip_prefix(field_name)
+            .or_else(|| line.strip_prefix(&field_name.to_lowercase()))
+            .unwrap_or("")
+            .trim()
+            .to_string()
+    }
+    
+    /// 检查是否是新的字段开始
+    fn is_new_field(&self, line: &str) -> bool {
+        let line_upper = line.trim().to_uppercase();
+        line_upper.starts_with("UNDERSTANDING:") ||
+        line_upper.starts_with("APPROACH:") ||
+        line_upper.starts_with("COMPLEXITY:") ||
+        line_upper.starts_with("REQUIREMENTS:")
     }
 }
 
@@ -379,6 +456,36 @@ mod tests {
         assert_eq!(plan.requirements.len(), 2);
         assert!(plan.requirements.contains(&"file access".to_string()));
         assert!(plan.requirements.contains(&"network".to_string()));
+    }
+}
+
+impl PlanningEngine {
+    /// 提取字段内容 - 增强版，支持多种格式
+    fn extract_field_content_enhanced(&self, line: &str, markdown_prefix: &str, plain_prefix: &str) -> String {
+        line.strip_prefix(markdown_prefix)
+            .or_else(|| line.strip_prefix(plain_prefix))
+            .or_else(|| line.strip_prefix(&markdown_prefix.to_lowercase()))
+            .or_else(|| line.strip_prefix(&plain_prefix.to_lowercase()))
+            .unwrap_or("")
+            .trim()
+            .to_string()
+    }
+    
+    /// 检查是否是新的字段开始 - 增强版
+    fn is_new_field_enhanced(&self, line: &str) -> bool {
+        let line_upper = line.trim().to_uppercase();
+        line_upper.starts_with("**UNDERSTANDING**:") ||
+        line_upper.starts_with("UNDERSTANDING:") ||
+        line_upper.starts_with("**APPROACH**:") ||
+        line_upper.starts_with("APPROACH:") ||
+        line_upper.starts_with("**COMPLEXITY**:") ||
+        line_upper.starts_with("COMPLEXITY:") ||
+        line_upper.starts_with("**REQUIREMENTS**:") ||
+        line_upper.starts_with("REQUIREMENTS:") ||
+        line_upper.starts_with("**PLAN**:") ||
+        line_upper.starts_with("PLAN:") ||
+        line_upper.starts_with("**EXECUTION**:") ||
+        line_upper.starts_with("EXECUTION:")
     }
 }
 

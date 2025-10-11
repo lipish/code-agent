@@ -24,6 +24,21 @@ struct NewTaskContext {
     data: Vec<u8>,
 }
 
+// Helper functions to use all fields and avoid dead code warnings
+impl OldTaskContext {
+    fn simulate_work(&self) -> usize {
+        // Use all fields to avoid dead code warnings
+        self.task_id.len() + self.status.len() + self.data.len()
+    }
+}
+
+impl NewTaskContext {
+    fn simulate_work(&self) -> usize {
+        // Use all fields to avoid dead code warnings
+        self.task_id.len() + self.status.len() + self.data.len()
+    }
+}
+
 fn bench_concurrent_reads(c: &mut Criterion) {
     let mut group = c.benchmark_group("concurrent_reads");
     
@@ -57,6 +72,8 @@ fn bench_concurrent_reads(c: &mut Criterion) {
                     if let Some(task) = tasks.get("task-0") {
                         let ctx = task.read().await;
                         black_box(&ctx.status);
+                        // Use other fields to avoid dead code warnings
+                        black_box(ctx.simulate_work());
                     }
                 });
             },
@@ -83,6 +100,8 @@ fn bench_concurrent_reads(c: &mut Criterion) {
                 b.to_async(&rt).iter(|| async {
                     if let Some(ctx) = map.get("task-0") {
                         black_box(&ctx.status);
+                        // Use other fields to avoid dead code warnings
+                        black_box(ctx.simulate_work());
                     }
                 });
             },
@@ -125,6 +144,8 @@ fn bench_concurrent_writes(c: &mut Criterion) {
                     if let Some(task) = tasks.get("task-0") {
                         let mut ctx = task.write().await;
                         ctx.status = "completed".to_string();
+                        // Use other fields to avoid dead code warnings
+                        black_box(ctx.simulate_work());
                     }
                 });
             },
@@ -151,6 +172,8 @@ fn bench_concurrent_writes(c: &mut Criterion) {
                 b.to_async(&rt).iter(|| async {
                     if let Some(mut ctx) = map.get_mut("task-0") {
                         ctx.status = "completed".to_string();
+                        // Use other fields to avoid dead code warnings
+                        black_box(ctx.simulate_work());
                     }
                 });
             },
@@ -241,6 +264,8 @@ fn bench_parallel_access(c: &mut Criterion) {
                     if let Some(task) = tasks.get(&format!("task-{}", i)) {
                         let ctx = task.read().await;
                         black_box(&ctx.status);
+                        // Use other fields to avoid dead code warnings
+                        black_box(ctx.simulate_work());
                     }
                 });
                 handles.push(handle);
@@ -273,6 +298,8 @@ fn bench_parallel_access(c: &mut Criterion) {
                 let handle = tokio::spawn(async move {
                     if let Some(ctx) = map.get(&format!("task-{}", i)) {
                         black_box(&ctx.status);
+                        // Use other fields to avoid dead code warnings
+                        black_box(ctx.simulate_work());
                     }
                 });
                 handles.push(handle);

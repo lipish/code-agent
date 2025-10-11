@@ -1,12 +1,12 @@
 # AI-Native Code Agent Configuration
 
 [model]
-# Model provider: "zhipu", "deepseek", "moonshot", "openai", "anthropic"
+# Model provider: "zhipu", "deepseek", "moonshot", "openai", "anthropic", "aliyun", "longcat", "volcengine"
 provider = "deepseek"
 model_name = "deepseek-chat"
-# Use environment variable for API key
-api_key = "${DEEPSEEK_API_KEY}"
-# Optional: custom endpoint (must include /v1 for OpenAI-compatible APIs)
+# Use environment variable for API key or set directly
+api_key = "sk-78f437f4e0174650ae18734e6ec5bd03"
+# Optional: custom endpoint (will use default if not specified)
 endpoint = "https://api.deepseek.com/v1"
 max_tokens = 4000
 temperature = 0.7

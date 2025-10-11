@@ -142,33 +142,76 @@ impl LlmModel {
 
     /// Create llm-connector client based on provider
     ///
-    /// Note: llm-connector is protocol-based, not provider-based.
-    /// Most providers (Zhipu, DeepSeek, Moonshot, etc.) use OpenAI-compatible protocol.
-    ///
-    /// For custom endpoints, set OPENAI_API_BASE environment variable before creating client.
+    /// Note: llm-connector 0.3.1 changed the API.
+    /// Now all providers use LlmClient::openai(api_key, Some(endpoint)) or LlmClient::ollama(Some(endpoint))
     fn create_client(config: &ModelConfig) -> Result<LlmClient, ModelError> {
+        // Handle providers that don't need API keys first
+        match &config.provider {
+            ModelProvider::Ollama => {
+                // Ollama local server - no API key required
+                let endpoint = config.endpoint.as_deref();
+                return Ok(LlmClient::ollama(endpoint));
+            }
+            _ => {}
+        }
+
+        // All other providers require API key
         let api_key = config.api_key.as_ref()
             .ok_or_else(|| ModelError::ConfigError("API key required".into()))?;
-
-        // Set custom endpoint via environment variable if provided
-        // This is the standard way to use custom OpenAI-compatible endpoints
-        if let Some(endpoint) = &config.endpoint {
-            std::env::set_var("OPENAI_API_BASE", endpoint);
-        }
 
         match &config.provider {
             ModelProvider::Anthropic => {
                 // Anthropic uses its own protocol
                 Ok(LlmClient::anthropic(api_key))
             }
-            ModelProvider::Local(endpoint) => {
-                // Local Ollama
-                Ok(LlmClient::ollama_at(endpoint))
+            ModelProvider::Xinference => {
+                // Xinference local server - OpenAI-compatible
+                let endpoint = config.endpoint.as_deref().or(Some("http://localhost:9997/v1"));
+                Ok(LlmClient::openai(api_key, endpoint))
             }
-            // All OpenAI-compatible providers (OpenAI, Zhipu, DeepSeek, Moonshot, etc.)
-            _ => {
-                // Use OpenAI protocol (works with any OpenAI-compatible API)
-                Ok(LlmClient::openai(api_key))
+            ModelProvider::Local(endpoint) => {
+                // Generic local server - assume OpenAI-compatible
+                Ok(LlmClient::openai(api_key, Some(endpoint)))
+            }
+            ModelProvider::OpenAI => {
+                // Standard OpenAI client
+                let endpoint = config.endpoint.as_deref().or(Some("https://api.openai.com/v1"));
+                Ok(LlmClient::openai(api_key, endpoint))
+            }
+            ModelProvider::Zhipu => {
+                // Zhipu AI (智谱AI) - OpenAI-compatible
+                let endpoint = config.endpoint.as_deref().or(Some("https://open.bigmodel.cn/api/paas/v4"));
+                Ok(LlmClient::openai(api_key, endpoint))
+            }
+            ModelProvider::DeepSeek => {
+                // DeepSeek - OpenAI-compatible 
+                let endpoint = config.endpoint.as_deref().or(Some("https://api.deepseek.com/v1"));
+                Ok(LlmClient::openai(api_key, endpoint))
+            }
+            ModelProvider::Moonshot => {
+                // Moonshot AI - OpenAI-compatible
+                let endpoint = config.endpoint.as_deref().or(Some("https://api.moonshot.cn/v1"));
+                Ok(LlmClient::openai(api_key, endpoint))
+            }
+            ModelProvider::Aliyun => {
+                // Aliyun DashScope - OpenAI-compatible mode
+                let endpoint = config.endpoint.as_deref().or(Some("https://dashscope.aliyuncs.com/compatible-mode/v1"));
+                Ok(LlmClient::openai(api_key, endpoint))
+            }
+            ModelProvider::LongCat => {
+                // LongCat - OpenAI-compatible
+                let endpoint = config.endpoint.as_deref().or(Some("https://api.longcat.chat/openai"));
+                Ok(LlmClient::openai(api_key, endpoint))
+            }
+            ModelProvider::VolcEngine => {
+                // VolcEngine - OpenAI-compatible (requires valid endpoint ID)
+                // Note: The endpoint ID must be created and enabled in VolcEngine console
+                let endpoint = config.endpoint.as_deref().or(Some("https://ark.cn-beijing.volces.com/api/v3"));
+                Ok(LlmClient::openai(api_key, endpoint))
+            }
+            ModelProvider::Ollama => {
+                // This should be unreachable as Ollama is handled above
+                unreachable!("Ollama should be handled before API key check")
             }
         }
     }
@@ -231,7 +274,9 @@ impl LanguageModel for LlmModel {
         // Most modern LLMs support tools
         matches!(
             self.config.provider,
-            ModelProvider::OpenAI | ModelProvider::Anthropic | ModelProvider::Zhipu
+            ModelProvider::OpenAI | ModelProvider::Anthropic | ModelProvider::Zhipu |
+            ModelProvider::DeepSeek | ModelProvider::Moonshot | ModelProvider::Aliyun |
+            ModelProvider::Xinference // Xinference supports tools if the underlying model does
         )
     }
 }
