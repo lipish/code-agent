@@ -26,8 +26,10 @@
 //! ```
 
 mod engine;
+mod approach_parser;
 
 pub use engine::{PlanningEngine, PlanningConfig};
+pub use approach_parser::ApproachParser;
 
 // Backward compatibility aliases (deprecated)
 #[deprecated(since = "0.2.3", note = "Use `PlanningEngine` instead")]

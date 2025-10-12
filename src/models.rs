@@ -102,7 +102,35 @@ impl MockModel {
 #[async_trait]
 impl LanguageModel for MockModel {
     async fn complete(&self, prompt: &str) -> Result<ModelResponse, ModelError> {
-        Ok(ModelResponse::text(format!("Mock response from {}: {}", self.name, prompt)))
+        // 针对不同类型的任务提供更真实的mock响应
+        let response = if prompt.contains("代理商License管理") || prompt.contains("License管理系统") {
+            format!(r#"UNDERSTANDING: 需要为软件公司构建一个完整的代理商License管理系统，支持多级代理商架构、License全生命周期管理、权限控制和安全验证机制。
+APPROACH: 采用微服务架构设计，使用数据库存储代理商层次结构和License信息，实现RESTful API，集成JWT认证，设计License加密算法，开发Web管理界面和移动端应用。
+COMPLEXITY: Complex
+REQUIREMENTS: 数据库设计、加密算法、API开发、认证系统、前端界面、移动端开发"#)
+        } else if prompt.contains("投资组合") || prompt.contains("portfolio") || prompt.contains("金融") {
+            format!(r#"UNDERSTANDING: 构建智能投资组合分析系统，支持多资产类别管理、实时市场数据处理、风险评估和投资策略优化，需要处理大量金融数据并提供实时分析。
+APPROACH: 使用大数据架构处理实时市场数据，集成机器学习算法进行预测分析，设计风险管理模块，开发数据可视化界面，实现多语言报告生成系统。
+COMPLEXITY: Complex
+REQUIREMENTS: 大数据处理、机器学习框架、实时数据流、风险计算模型、数据可视化、多语言支持"#)
+        } else if prompt.contains("会议室") || prompt.contains("预定") || prompt.contains("booking") {
+            format!(r#"UNDERSTANDING: 开发多分支机构会议室预定管理系统，支持智能预定、冲突检测、审批流程、实时通知和移动端管理，需要处理多地点多用户的复杂业务场景。
+APPROACH: 设计分布式架构支持多分支，实现智能调度算法，集成多种通知渠道，开发移动端APP，设计权限管理体系，实现与企业系统集成。
+COMPLEXITY: Moderate
+REQUIREMENTS: 分布式架构、调度算法、通知系统、移动端开发、权限管理、系统集成"#)
+        } else if prompt.contains("简单") || prompt.contains("读取") || prompt.contains("配置") {
+            format!(r#"UNDERSTANDING: 执行简单的文件读取和配置处理任务。
+APPROACH: 使用标准文件操作库读取配置文件并解析内容。
+COMPLEXITY: Simple
+REQUIREMENTS: 文件系统访问"#)
+        } else {
+            format!(r#"UNDERSTANDING: 分析并理解用户提出的任务需求，确定实现方案和技术路线。
+APPROACH: 根据任务复杂度选择合适的技术栈和架构模式，制定分步实施计划。
+COMPLEXITY: Moderate
+REQUIREMENTS: 根据具体需求确定"#)
+        };
+        
+        Ok(ModelResponse::text(response))
     }
 
     async fn complete_with_tools(&self, prompt: &str, _tools: &[ToolDefinition]) -> Result<ModelResponse, ModelError> {

@@ -46,9 +46,9 @@ pub use errors::AgentError;
 // Service exports (only available with "service" feature)
 #[cfg(feature = "service")]
 pub use service::types::{
-    // Task types
+    // Task types  
     TaskRequest, TaskResponse, TaskStatus, TaskResult, TaskPriority,
-    TaskContext, TaskConstraints, TaskPlan, TaskComplexity,
+    TaskContext, TaskConstraints,
     ExecutionStep, StepType, StepStatus, TaskMetrics,
     TaskArtifact, ArtifactType, ServiceError,
     // Batch types
@@ -59,6 +59,8 @@ pub use service::types::{
     // WebSocket types
     WebSocketMessage,
 };
+
+// Note: TaskPlan and TaskComplexity are re-exported from types::* above to avoid duplication
 
 #[cfg(feature = "service")]
 pub use service::{

@@ -36,10 +36,13 @@ pub mod websocket;
 // Re-export commonly used types for convenience
 pub use task::{
     TaskRequest, TaskResponse, TaskStatus, TaskResult, TaskPriority,
-    TaskContext, TaskConstraints, TaskPlan, TaskComplexity,
+    TaskContext, TaskConstraints,
     ExecutionStep, StepType, StepStatus, TaskMetrics,
     TaskArtifact, ArtifactType, ServiceError,
 };
+
+// Re-export unified types from core
+pub use crate::types::{TaskPlan, TaskComplexity};
 
 pub use batch::{
     BatchTaskRequest, BatchTaskResponse, BatchExecutionMode, BatchStatistics,

@@ -397,6 +397,13 @@ impl PlanningEngine {
             complexity,
             estimated_steps: Some(estimated_steps),
             requirements,
+            structured_steps: None,
+            step_dependencies: None,
+            // Service layer fields with defaults
+            steps: vec![],
+            required_tools: vec![],
+            estimated_time: None,
+            created_at: None,
         })
     }
     

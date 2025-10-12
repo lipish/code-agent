@@ -486,7 +486,7 @@ impl TaskAgentService {
                     TaskStatus::Failed
                 };
                 context.steps = steps.clone();
-                context.plan = agent_result.task_plan.as_ref().map(|p| convert_task_plan(p.clone()));
+                context.plan = agent_result.task_plan.as_ref().map(|p| p.clone().with_service_fields());
                 context.metrics.total_execution_time = Some(agent_result.execution_time.unwrap_or(0));
                 context.metrics.planning_time_ms = Some(planning_start.elapsed().as_millis() as u64);
                 context.metrics.execution_time_ms = Some(execution_start.elapsed().as_millis() as u64);
@@ -510,7 +510,7 @@ impl TaskAgentService {
                     artifacts: Vec::new(), // TODO: Extract artifacts from result
                     execution_time: agent_result.execution_time.unwrap_or(0),
                 }),
-                plan: agent_result.task_plan.map(convert_task_plan),
+                plan: agent_result.task_plan.map(|p| p.with_service_fields()),
                 steps,
                 metrics,
                 error: None,
@@ -571,21 +571,3 @@ fn get_available_tools() -> Vec<String> {
     ]
 }
 
-/// Convert types::TaskPlan to service::types::TaskPlan
-fn convert_task_plan(plan: crate::types::TaskPlan) -> TaskPlan {
-    TaskPlan {
-        understanding: plan.understanding.clone(),
-        approach: plan.approach.clone(),
-        complexity: match plan.complexity {
-            crate::types::TaskComplexity::Simple => TaskComplexity::Simple,
-            crate::types::TaskComplexity::Moderate => TaskComplexity::Medium,
-            crate::types::TaskComplexity::Complex => TaskComplexity::Complex,
-        },
-        steps: vec![plan.approach],  // Convert approach to steps
-        required_tools: vec![],  // Not available in types::TaskPlan
-        estimated_time: None,  // Not available in types::TaskPlan
-        estimated_steps: plan.estimated_steps,
-        requirements: plan.requirements,
-        created_at: Some(Utc::now()),
-    }
-}

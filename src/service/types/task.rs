@@ -141,38 +141,16 @@ pub enum ArtifactType {
 }
 
 /// Task execution plan
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TaskPlan {
-    /// Task understanding
-    pub understanding: String,
-    /// Execution approach
-    pub approach: String,
-    /// Estimated complexity
-    pub complexity: TaskComplexity,
-    /// Planned steps
-    pub steps: Vec<String>,
-    /// Required tools
-    pub required_tools: Vec<String>,
-    /// Estimated time in seconds
-    pub estimated_time: Option<u64>,
+/// This type has been unified with crate::types::TaskPlan
+/// Use crate::types::TaskPlan instead
+#[deprecated(note = "Use crate::types::TaskPlan instead")]
+pub type TaskPlan = crate::types::TaskPlan;
 
-    // Legacy fields for backward compatibility
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub estimated_steps: Option<u32>,
-    #[serde(default)]
-    pub requirements: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub created_at: Option<DateTime<Utc>>,
-}
-
-/// Task complexity level
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum TaskComplexity {
-    Simple,
-    Medium,
-    Complex,
-}
+/// Task complexity level  
+/// This type has been unified with crate::types::TaskComplexity
+/// Use crate::types::TaskComplexity instead
+#[deprecated(note = "Use crate::types::TaskComplexity instead")]
+pub type TaskComplexity = crate::types::TaskComplexity;
 
 /// Execution step information
 #[derive(Debug, Clone, Serialize, Deserialize)]
