@@ -1,6 +1,6 @@
-# Task Runner
+# Agent Runner
 
-A simple and efficient AI-driven task execution service that provides both Rust API and HTTP REST interfaces, easily integrable into any application.
+A simple and efficient AI-driven agent execution service that provides both Rust API and HTTP REST interfaces, easily integrable into any application.
 
 [![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -49,7 +49,7 @@ execution/                 - Execution operations module
 
 ## ✨ Prompt Engineering System
 
-Task Runner implements a flexible prompt engineering system inspired by OpenAI Codex and Roo-Code:
+**Agent Runner** implements a flexible prompt engineering system inspired by OpenAI Codex and Roo-Code:
 
 **Core Features**: Hierarchical structure (Global + Project + Scenario), External YAML configuration, 9+ predefined scenarios, Dynamic loading, Smart inference, Extensible
 
@@ -79,8 +79,8 @@ See: [Prompt Engineering Documentation](doc/PROMPT_ENGINEERING.md)
 
 ```bash
 # Clone the project
-git clone https://github.com/lipish/task-runner.git
-cd task-runner
+git clone https://github.com/lipish/agent-runner.git
+cd agent-runner
 
 # Configure API key
 cp .env.example .env
@@ -94,12 +94,12 @@ cargo run -- task "Analyze this project and create a summary"
 
 ```bash
 # Start HTTP service
-cargo run --bin task-runner-server
+cargo run --bin agent-runner-server
 
 # Test in another terminal
 curl -X POST http://localhost:8080/api/v1/tasks \
   -H "Content-Type: application/json" \
-  -d '{"task": "Hello, Task Runner!"}'
+  -d '{"task": "Hello, Agent Runner!"}'
 ```
 
 
@@ -108,7 +108,7 @@ curl -X POST http://localhost:8080/api/v1/tasks \
 ### 1. Rust API Integration
 
 ```rust
-use task_runner::{
+use agent_runner::{
     service::{TaskRunnerService, ServiceConfig, TaskRunnerClient, ApiClientBuilder},
     config::AgentConfig
 };
@@ -227,21 +227,21 @@ burst_size = 10
 
 ```bash
 # Service configuration
-TASK_RUNNER_MAX_CONCURRENT_TASKS=10
-TASK_RUNNER_DEFAULT_TASK_TIMEOUT=300
-TASK_RUNNER_ENABLE_METRICS=true
-TASK_RUNNER_LOG_LEVEL=info
+AGENT_RUNNER_MAX_CONCURRENT_TASKS=10
+AGENT_RUNNER_DEFAULT_TASK_TIMEOUT=300
+AGENT_RUNNER_ENABLE_METRICS=true
+AGENT_RUNNER_LOG_LEVEL=info
 
 # Server configuration
 BIND_ADDRESS=0.0.0.0:8080
 
 # AI model configuration
-TASK_RUNNER_MODEL_PROVIDER=zhipu
-TASK_RUNNER_MODEL_NAME=glm-4
-TASK_RUNNER_API_KEY=your-api-key
+AGENT_RUNNER_MODEL_PROVIDER=zhipu
+AGENT_RUNNER_MODEL_NAME=glm-4
+AGENT_RUNNER_API_KEY=your-api-key
 
 # CORS configuration
-TASK_RUNNER_CORS_ALLOWED_ORIGINS=*
+AGENT_RUNNER_CORS_ALLOWED_ORIGINS=*
 ```
 
 ## 📊 API Documentation
@@ -405,7 +405,7 @@ hey -n 1000 -c 50 \
           └──────────────────────┼──────────────────────┘
                                  │
                     ┌─────────────┴─────────────┐
-                    │   Task Runner Service    │
+                    │   Agent Runner Service    │
                     │  (Core Business Logic)  │
                     └─────────────┬─────────────┘
                                  │
@@ -421,11 +421,11 @@ hey -n 1000 -c 50 \
 
 ### 核心模块架构
 
-Task Runner 采用**模块化、职责分离**的架构设计，确保代码清晰、可维护：
+Agent Runner 采用**模块化、职责分离**的架构设计，确保代码清晰、可维护：
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    task_runner                          │
+│                    agent_runner                          │
 ├─────────────────────────────────────────────────────────┤
 │                                                         │
 │  ┌──────────────────┐      ┌──────────────────────┐   │
@@ -462,7 +462,7 @@ Task Runner 采用**模块化、职责分离**的架构设计，确保代码清�
 
 ### 任务执行工作流
 
-Task Runner 采用**模块化、AI 驱动**的执行模式，通过职责分离实现清晰的处理流程。
+Agent Runner 采用**模块化、AI 驱动**的执行模式，通过职责分离实现清晰的处理流程。
 
 #### 完整执行流程
 
@@ -611,10 +611,10 @@ MIT License - See [LICENSE](LICENSE) file for details
 
 ## 🔗 Related Links
 
-- [GitHub Repository](https://github.com/lipish/task-runner)
-- [Docker Hub](https://hub.docker.com/r/task-runner/service)
+- [GitHub Repository](https://github.com/lipish/agent-runner)
+- [Docker Hub](https://hub.docker.com/r/agent-runner/service)
 - [API Documentation](doc/SERVICE_API.md)
 
 ---
 
-**Task Runner** - Simple and efficient AI-driven task execution service.
+**Agent Runner** - Simple and efficient AI-driven agent execution service.

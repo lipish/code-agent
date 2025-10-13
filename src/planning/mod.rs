@@ -8,8 +8,8 @@
 //! # Examples
 //!
 //! ```no_run
-//! use task_runner::planning::{PlanningEngine, PlanningConfig};
-//! use task_runner::models::MockModel;
+//! use agent_runner::planning::{PlanningEngine, PlanningConfig};
+//! use agent_runner::models::MockModel;
 //! use std::sync::Arc;
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {

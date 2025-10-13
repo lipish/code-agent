@@ -189,7 +189,7 @@ mod tests {
         assert!(result.is_ok());
         let result = result.unwrap();
         assert!(result.success);
-        assert!(result.details.contains("task-runner"));
+        assert!(result.details.contains("agent-runner"));
     }
 
     #[tokio::test]

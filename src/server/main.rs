@@ -1,10 +1,10 @@
-//! Code Agent Service HTTP Server
+//! Agent Runner Service HTTP Server
 
 use axum::{
-    extract::{Path, Query, State},
-    http::{StatusCode, HeaderMap},
-    response::{Json, Response},
-    routing::{delete, get, post},
+    extract::{Path, State},
+    http::StatusCode,
+    response::Json,
+    routing::{delete, get, post, put},
     Router,
     middleware,
 };
@@ -13,14 +13,14 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::{
-    cors::{Any, CorsLayer},
+    cors::CorsLayer,
     trace::TraceLayer,
 };
-use tracing::{info, warn, error};
+use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use task_runner::service::{TaskAgentService, ServiceConfig, TaskRequest, BatchTaskRequest, TaskResponse, BatchTaskResponse, ServiceStatus, MetricsSnapshot, ServiceError};
-use task_runner::config::AgentConfig;
+use agent_runner::{TaskAgentService, ServiceConfig, TaskRequest, BatchTaskRequest, TaskResponse, BatchTaskResponse, ServiceStatus, MetricsSnapshot, ServiceError};
+use agent_runner::config::AgentConfig;
 
 #[derive(Clone)]
 struct AppState {
@@ -77,7 +77,7 @@ async fn main() -> anyhow::Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    info!("Starting Code Agent Service HTTP Server");
+    info!("Starting Agent Runner Service HTTP Server");
 
     // Load configuration
     let service_config = load_service_config().await?;
@@ -85,7 +85,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Create service
     let config = Arc::new(tokio::sync::RwLock::new(agent_config.clone()));
-    let service = Arc::new(TaskAgentService::new(service_config.clone(), agent_config).await?);
+    let service = Arc::new(TaskAgentService::new(service_config.clone(), agent_config).await.map_err(|e| anyhow::anyhow!("Failed to create service: {:?}", e))?);
 
     // Create router
     let app = create_router(service.clone(), config.clone(), service_config.clone());
@@ -104,7 +104,7 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn create_router(service: Arc<TaskAgentService>, config: Arc<tokio::sync::RwLock<AgentConfig>>, service_config: ServiceConfig) -> Router {
+fn create_router(service: Arc<TaskAgentService>, config: Arc<tokio::sync::RwLock<AgentConfig>>, _service_config: ServiceConfig) -> Router {
     let state = AppState { service, config };
 
     Router::new()
@@ -130,7 +130,7 @@ fn create_router(service: Arc<TaskAgentService>, config: Arc<tokio::sync::RwLock
         .route("/api/v1/config/validate", post(validate_config))
 
         // Legacy routes for backward compatibility
-        .route("/tasks", post(execute_task_legacy))
+        .route("/tasks", post(execute_task))
         .route("/config", get(get_service_status))
 
         .nest_service("/metrics", axum::routing::get(prometheus_metrics_handler))
@@ -148,7 +148,7 @@ async fn health_check() -> Result<Json<serde_json::Value>, StatusCode> {
     Ok(Json(serde_json::json!({
         "status": "healthy",
         "timestamp": chrono::Utc::now(),
-        "service": "code-agent-service",
+        "service": "agent-runner-service",
         "version": env!("CARGO_PKG_VERSION")
     })))
 }
@@ -198,7 +198,7 @@ async fn execute_task(
 
 async fn execute_task_legacy(
     State(state): State<AppState>,
-    Json(request): serde_json::Value,
+    Json(request): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, ServiceError> {
     // Legacy format support for backward compatibility
     let task = request.get("task")
@@ -301,10 +301,10 @@ async fn update_model_config(
     // Update model configuration fields
     if let Some(provider) = model_update.provider {
         config.model.provider = match provider.as_str() {
-            "zhipu" => task_runner::config::ModelProvider::Zhipu,
-            "openai" => task_runner::config::ModelProvider::OpenAI,
-            "anthropic" => task_runner::config::ModelProvider::Anthropic,
-            "local" => task_runner::config::ModelProvider::Local(
+            "zhipu" => agent_runner::config::ModelProvider::Zhipu,
+            "openai" => agent_runner::config::ModelProvider::OpenAI,
+            "anthropic" => agent_runner::config::ModelProvider::Anthropic,
+            "local" => agent_runner::config::ModelProvider::Local(
                 model_update.endpoint.clone().unwrap_or_else(|| "http://localhost:8081".to_string())
             ),
             _ => return Err(ServiceError {
@@ -353,7 +353,7 @@ async fn update_model_config(
 }
 
 async fn validate_config(
-    _State(_state): State<AppState>,
+    State(_state): State<AppState>,
     Json(request): Json<ConfigValidationRequest>,
 ) -> Result<Json<ConfigValidationResponse>, ServiceError> {
     let mut errors = Vec::new();
@@ -412,9 +412,9 @@ async fn validate_config(
     }))
 }
 
-async fn request_id_middleware<B>(
-    request: axum::extract::Request<B>,
-    next: axum::middleware::Next<B>,
+async fn request_id_middleware(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
 ) -> axum::response::Response {
     let request_id = uuid::Uuid::new_v4().to_string();
 
@@ -428,43 +428,43 @@ async fn request_id_middleware<B>(
 async fn prometheus_metrics_handler() -> Result<String, StatusCode> {
     // This is a placeholder for Prometheus metrics
     // In a real implementation, you would use the metrics-exporter-prometheus crate
-    Ok("# HELP code_agent_requests_total Total number of requests
-# TYPE code_agent_requests_total counter
-code_agent_requests_total 0
+    Ok("# HELP agent_runner_requests_total Total number of requests
+# TYPE agent_runner_requests_total counter
+agent_runner_requests_total 0
 
-# HELP code_agent_request_duration_seconds Request duration
-# TYPE code_agent_request_duration_seconds histogram
-code_agent_request_duration_seconds_bucket{le=\"1.0\"} 0
-code_agent_request_duration_seconds_bucket{le=\"+Inf\"} 0
-code_agent_request_duration_seconds_count 0
-code_agent_request_duration_seconds_sum 0
+# HELP agent_runner_request_duration_seconds Request duration
+# TYPE agent_runner_request_duration_seconds histogram
+agent_runner_request_duration_seconds_bucket{le=\"1.0\"} 0
+agent_runner_request_duration_seconds_bucket{le=\"+Inf\"} 0
+agent_runner_request_duration_seconds_count 0
+agent_runner_request_duration_seconds_sum 0
 
-# HELP code_agent_active_tasks Number of active tasks
-# TYPE code_agent_active_tasks gauge
-code_agent_active_tasks 0
+# HELP agent_runner_active_tasks Number of active tasks
+# TYPE agent_runner_active_tasks gauge
+agent_runner_active_tasks 0
 
-# HELP code_agent_completed_tasks_total Total number of completed tasks
-# TYPE code_agent_completed_tasks_total counter
-code_agent_completed_tasks_total 0
+# HELP agent_runner_completed_tasks_total Total number of completed tasks
+# TYPE agent_runner_completed_tasks_total counter
+agent_runner_completed_tasks_total 0
 
-# HELP code_agent_failed_tasks_total Total number of failed tasks
-# TYPE code_agent_failed_tasks_total counter
-code_agent_failed_tasks_total 0".to_string())
+# HELP agent_runner_failed_tasks_total Total number of failed tasks
+# TYPE agent_runner_failed_tasks_total counter
+agent_runner_failed_tasks_total 0".to_string())
 }
 
 async fn load_service_config() -> Result<ServiceConfig, anyhow::Error> {
     // Try to load from environment or use defaults
-    let max_concurrent_tasks = std::env::var("CODE_AGENT_MAX_CONCURRENT_TASKS")
+    let max_concurrent_tasks = std::env::var("AGENT_RUNNER_MAX_CONCURRENT_TASKS")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(10);
 
-    let default_task_timeout = std::env::var("CODE_AGENT_DEFAULT_TASK_TIMEOUT")
+    let default_task_timeout = std::env::var("AGENT_RUNNER_DEFAULT_TASK_TIMEOUT")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(300);
 
-    let enable_metrics = std::env::var("CODE_AGENT_ENABLE_METRICS")
+    let enable_metrics = std::env::var("AGENT_RUNNER_ENABLE_METRICS")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(true);
@@ -474,20 +474,14 @@ async fn load_service_config() -> Result<ServiceConfig, anyhow::Error> {
         default_task_timeout,
         max_task_timeout: 3600,
         enable_metrics,
-        log_level: std::env::var("CODE_AGENT_LOG_LEVEL").unwrap_or_else(|_| "info".to_string()),
-        cors: task_runner::service::CorsConfig {
-            allowed_origins: vec!["*".to_string()],
-            allowed_methods: vec!["GET".to_string(), "POST".to_string(), "DELETE".to_string()],
-            allowed_headers: vec!["*".to_string()],
-            allow_credentials: false,
-        },
-        rate_limiting: None,
+        log_level: std::env::var("AGENT_RUNNER_LOG_LEVEL").unwrap_or_else(|_| "info".to_string()),
+        log_level: std::env::var("AGENT_RUNNER_LOG_LEVEL").unwrap_or_else(|_| "info".to_string()),
     })
 }
 
 async fn load_agent_config() -> Result<AgentConfig, anyhow::Error> {
     // Try to load from config file or environment
-    let config_path = std::env::var("CODE_AGENT_CONFIG_FILE")
+    let config_path = std::env::var("AGENT_RUNNER_CONFIG_FILE")
         .unwrap_or_else(|_| "config.toml".to_string());
 
     if std::path::Path::new(&config_path).exists() {
@@ -495,75 +489,71 @@ async fn load_agent_config() -> Result<AgentConfig, anyhow::Error> {
             .map_err(|e| anyhow::anyhow!("Failed to load config: {}", e))
     } else {
         // Create default config from environment
-        let provider = std::env::var("CODE_AGENT_MODEL_PROVIDER")
+        let provider = std::env::var("AGENT_RUNNER_MODEL_PROVIDER")
             .unwrap_or_else(|_| "zhipu".to_string());
 
-        let model_name = std::env::var("CODE_AGENT_MODEL_NAME")
+        let model_name = std::env::var("AGENT_RUNNER_MODEL_NAME")
             .unwrap_or_else(|_| "glm-4".to_string());
 
-        let api_key = std::env::var("CODE_AGENT_API_KEY")
-            .ok_or_else(|| anyhow::anyhow!("CODE_AGENT_API_KEY environment variable is required"))?;
+        let api_key = std::env::var("AGENT_RUNNER_API_KEY")
+            .ok().ok_or_else(|| anyhow::anyhow!("AGENT_RUNNER_API_KEY environment variable is required"))?;
 
         let provider_config = match provider.as_str() {
-            "zhipu" => task_runner::config::ModelProvider::Zhipu,
-            "openai" => task_runner::config::ModelProvider::OpenAI,
-            "anthropic" => task_runner::config::ModelProvider::Anthropic,
-            "local" => task_runner::config::ModelProvider::Local(
-                std::env::var("CODE_AGENT_LOCAL_ENDPOINT").unwrap_or_else(|_| "http://localhost:8081".to_string())
+            "zhipu" => agent_runner::config::ModelProvider::Zhipu,
+            "openai" => agent_runner::config::ModelProvider::OpenAI,
+            "anthropic" => agent_runner::config::ModelProvider::Anthropic,
+            "local" => agent_runner::config::ModelProvider::Local(
+                std::env::var("AGENT_RUNNER_LOCAL_ENDPOINT").unwrap_or_else(|_| "http://localhost:8081".to_string())
             ),
             _ => return Err(anyhow::anyhow!("Unsupported model provider: {}", provider)),
         };
 
         Ok(AgentConfig {
-            model: task_runner::config::ModelConfig {
+            model: agent_runner::config::ModelConfig {
                 provider: provider_config,
                 model_name,
                 api_key: Some(api_key),
-                endpoint: std::env::var("CODE_AGENT_MODEL_ENDPOINT").ok(),
-                max_tokens: std::env::var("CODE_AGENT_MAX_TOKENS")
+                endpoint: std::env::var("AGENT_RUNNER_MODEL_ENDPOINT").ok(),
+                max_tokens: std::env::var("AGENT_RUNNER_MAX_TOKENS")
                     .ok()
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(4000),
-                temperature: std::env::var("CODE_AGENT_TEMPERATURE")
+                temperature: std::env::var("AGENT_RUNNER_TEMPERATURE")
                     .ok()
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(0.7),
             },
-            execution: task_runner::config::ExecutionConfig {
-                max_steps: std::env::var("CODE_AGENT_MAX_STEPS")
+            execution: agent_runner::config::ExecutionConfig {
+                max_steps: std::env::var("AGENT_RUNNER_MAX_STEPS")
                     .ok()
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(10),
-                max_retries: std::env::var("CODE_AGENT_MAX_RETRIES")
+                max_retries: std::env::var("AGENT_RUNNER_MAX_RETRIES")
                     .ok()
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(3),
-                retry_delay_seconds: std::env::var("CODE_AGENT_RETRY_DELAY")
+                retry_delay_seconds: std::env::var("AGENT_RUNNER_RETRY_DELAY")
                     .ok()
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(1),
-                timeout_seconds: std::env::var("CODE_AGENT_TIMEOUT")
+                timeout_seconds: std::env::var("AGENT_RUNNER_TIMEOUT")
                     .ok()
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(300),
             },
-            tools: task_runner::config::ToolsConfig {
-                enable_file_operations: std::env::var("CODE_AGENT_ENABLE_FILE_OPS")
-                    .ok()
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(true),
-                enable_command_execution: std::env::var("CODE_AGENT_ENABLE_COMMANDS")
-                    .ok()
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(true),
-                working_directory: std::env::var("CODE_AGENT_WORK_DIR").ok(),
-                allowed_paths: std::env::var("CODE_AGENT_ALLOWED_PATHS")
-                    .ok()
-                    .map(|s| s.split(',').map(|p| p.trim().to_string()).collect()),
-                forbidden_commands: std::env::var("CODE_AGENT_FORBIDDEN_COMMANDS")
-                    .ok()
-                    .map(|s| s.split(',').map(|c| c.trim().to_string()).collect()),
+            tools: agent_runner::config::ToolConfig {
+                auto_discovery: true,
+                custom_tools_path: None,
+                enabled_tools: vec![
+                    "read_file".to_string(),
+                    "write_file".to_string(),
+                    "run_command".to_string(),
+                    "list_files".to_string(),
+                ],
+                disabled_tools: vec![],
             },
+            safety: Default::default(),
+            logging: Default::default(),
         })
     }
 }

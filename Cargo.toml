@@ -1,16 +1,16 @@
 [package]
-name = "task-runner"
+name = "agent-runner"
 version = "0.2.0"
 edition = "2021"
 authors = ["AI Agent Team"]
-description = "Simple AI-Powered Task Runner Service"
+description = "Simple AI-Powered Agent Runner Service"
 license = "MIT"
-repository = "https://github.com/lipish/task-runner"
-keywords = ["ai", "task-runner", "automation", "llm", "executor"]
+repository = "https://github.com/lipish/agent-runner"
+keywords = ["ai", "agent-runner", "automation", "llm", "executor"]
 categories = ["development-tools", "text-processing"]
 
 [lib]
-name = "task_runner"
+name = "agent_runner"
 path = "src/lib.rs"
 
 [dependencies]
@@ -80,6 +80,11 @@ criterion = { version = "0.5", features = ["async_tokio", "html_reports"] }
 [[bench]]
 name = "arc_optimization_bench"
 harness = false
+
+[[bin]]
+name = "agent-runner-server"
+path = "src/server/main.rs"
+required-features = ["service"]
 
 [profile.release]
 opt-level = 3

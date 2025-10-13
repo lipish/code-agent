@@ -66,7 +66,7 @@ const DEFAULT_TIMEOUT_SECS: u64 = 30;
 /// # 示例
 ///
 /// ```no_run
-/// use task_runner::execution::run_command;
+/// use agent_runner::execution::run_command;
 ///
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// // 列出文件

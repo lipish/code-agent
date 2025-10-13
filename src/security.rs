@@ -13,7 +13,7 @@ use std::time::Duration;
 /// # 示例
 ///
 /// ```rust
-/// use task_runner::security::ResourceLimits;
+/// use agent_runner::security::ResourceLimits;
 /// use std::time::Duration;
 ///
 /// // 使用默认限制

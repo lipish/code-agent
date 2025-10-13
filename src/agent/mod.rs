@@ -100,9 +100,9 @@ impl TaskAgent {
     /// # Examples
     ///
     /// ```no_run
-    /// use task_runner::agent::TaskAgent;
-    /// use task_runner::config::AgentConfig;
-    /// use task_runner::models::MockModel;
+    /// use agent_runner::agent::TaskAgent;
+    /// use agent_runner::config::AgentConfig;
+    /// use agent_runner::models::MockModel;
     ///
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let model = Box::new(MockModel::new("gpt-4".to_string()));
@@ -173,10 +173,10 @@ impl TaskAgent {
     /// # Examples
     ///
     /// ```no_run
-    /// use task_runner::agent::TaskAgent;
-    /// use task_runner::config::AgentConfig;
-    /// use task_runner::models::MockModel;
-    /// use task_runner::tools::ReadFileTool;
+    /// use agent_runner::agent::TaskAgent;
+    /// use agent_runner::config::AgentConfig;
+    /// use agent_runner::models::MockModel;
+    /// use agent_runner::tools::ReadFileTool;
     ///
     /// # async fn example() {
     /// let model = Box::new(MockModel::new("gpt-4".to_string()));

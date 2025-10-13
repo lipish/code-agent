@@ -46,7 +46,7 @@ const MAX_FILE_SIZE: u64 = 10 * 1024 * 1024;
 /// # 示例
 ///
 /// ```no_run
-/// use task_runner::execution::read_file;
+/// use agent_runner::execution::read_file;
 ///
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// // 读取配置文件
@@ -156,14 +156,14 @@ pub async fn read_file_with_limits(
 /// # 示例
 ///
 /// ```no_run
-/// use task_runner::execution::write_file;
+/// use agent_runner::execution::write_file;
 ///
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// // 写入文本文件
 /// write_file("output.txt", "Hello, world!").await?;
 ///
 /// // 写入 JSON 数据
-/// let json = r#"{"name": "task-runner", "version": "0.2.1"}"#;
+/// let json = r#"{"name": "agent-runner", "version": "0.2.1"}"#;
 /// write_file("data.json", json).await?;
 /// # Ok(())
 /// # }
@@ -226,7 +226,7 @@ pub async fn write_file(path: &str, content: &str) -> Result<(), AgentError> {
 /// # 示例
 ///
 /// ```no_run
-/// use task_runner::execution::list_files;
+/// use agent_runner::execution::list_files;
 ///
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// // 列出当前目录
@@ -326,7 +326,7 @@ mod tests {
         // Test reading Cargo.toml (should exist in project root)
         let result = read_file("Cargo.toml").await;
         assert!(result.is_ok());
-        assert!(result.unwrap().contains("task-runner"));
+        assert!(result.unwrap().contains("agent-runner"));
     }
 
     #[tokio::test]

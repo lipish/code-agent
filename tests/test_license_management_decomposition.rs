@@ -1,7 +1,7 @@
 use std::sync::Arc;
-use task_runner::planning::{PlanningEngine, PlanningConfig};
-use task_runner::models::{MockModel, LanguageModel};
-use task_runner::types::TaskComplexity;
+use agent_runner::planning::{PlanningEngine, PlanningConfig};
+use agent_runner::models::{MockModel, LanguageModel};
+use agent_runner::types::TaskComplexity;
 
 /// 测试代理商License管理系统的任务拆解
 #[tokio::test]
