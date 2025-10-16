@@ -20,6 +20,12 @@ pub enum AgentError {
     #[error("Configuration error: {0}")]
     ConfigError(String),
 
+    #[error("Invalid state: {0}")]
+    InvalidState(String),
+
+    #[error("Execution error: {0}")]
+    ExecutionError(String),
+
     #[error("Unknown error: {0}")]
     UnknownError(String),
 }

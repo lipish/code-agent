@@ -360,13 +360,15 @@ impl PlanningEngine {
             i += 1;
         }
         
-        // 从内容智能推断复杂度
-        if approach.len() > 200 || understanding.len() > 150 || requirements.len() > 10 {
-            complexity = TaskComplexity::Complex;
-        } else if approach.len() > 100 || understanding.len() > 80 || requirements.len() > 5 {
-            complexity = TaskComplexity::Moderate;
-        } else {
-            complexity = TaskComplexity::Simple;
+        // 从内容智能推断复杂度（仅在没有明确指定时）
+        if matches!(complexity, TaskComplexity::Moderate) {
+            if approach.len() > 200 || understanding.len() > 150 || requirements.len() > 10 {
+                complexity = TaskComplexity::Complex;
+            } else if approach.len() > 100 || understanding.len() > 80 || requirements.len() > 5 {
+                complexity = TaskComplexity::Moderate;
+            } else {
+                complexity = TaskComplexity::Simple;
+            }
         }
 
         // 验证并设置默认值
@@ -407,23 +409,7 @@ impl PlanningEngine {
         })
     }
     
-    /// 提取字段内容
-    fn extract_field_content(&self, line: &str, field_name: &str) -> String {
-        line.strip_prefix(field_name)
-            .or_else(|| line.strip_prefix(&field_name.to_lowercase()))
-            .unwrap_or("")
-            .trim()
-            .to_string()
-    }
-    
-    /// 检查是否是新的字段开始
-    fn is_new_field(&self, line: &str) -> bool {
-        let line_upper = line.trim().to_uppercase();
-        line_upper.starts_with("UNDERSTANDING:") ||
-        line_upper.starts_with("APPROACH:") ||
-        line_upper.starts_with("COMPLEXITY:") ||
-        line_upper.starts_with("REQUIREMENTS:")
-    }
+
 }
 
 #[cfg(test)]

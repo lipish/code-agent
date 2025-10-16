@@ -168,10 +168,34 @@ impl LlmModel {
         Ok(Self { client, config })
     }
 
+    /// Fetch available models from the API
+    ///
+    /// Supported by:
+    /// - OpenAI Protocol (including compatible providers like DeepSeek, Moonshot)
+    /// - Anthropic Protocol (limited support)
+    /// - Ollama Protocol (full support via /api/tags)
+    /// - Zhipu Protocol (via dedicated endpoint)
+    /// - Aliyun Protocol (not supported)
+    pub async fn fetch_available_models(&self) -> Result<Vec<String>, ModelError> {
+        self.client
+            .fetch_models()
+            .await
+            .map_err(|e| ModelError::APIError(format!("Failed to fetch models: {}", e)))
+    }
+
+    /// Get protocol name (useful for debugging)
+    pub fn protocol_name(&self) -> String {
+        self.client.protocol_name().to_string()
+    }
+
     /// Create llm-connector client based on provider
     ///
-    /// Note: llm-connector 0.3.1 changed the API.
-    /// Now all providers use LlmClient::openai(api_key, Some(endpoint)) or LlmClient::ollama(Some(endpoint))
+    /// Note: llm-connector 0.3.8 provides dedicated constructors for each protocol.
+    /// - OpenAI-compatible: openai(api_key, endpoint)
+    /// - Anthropic: anthropic(api_key)
+    /// - Zhipu: zhipu(api_key) 
+    /// - Aliyun: aliyun(api_key)
+    /// - Ollama: ollama(endpoint) - no API key needed
     fn create_client(config: &ModelConfig) -> Result<LlmClient, ModelError> {
         // Handle providers that don't need API keys first
         match &config.provider {
@@ -189,8 +213,16 @@ impl LlmModel {
 
         match &config.provider {
             ModelProvider::Anthropic => {
-                // Anthropic uses its own protocol
+                // Anthropic uses its own protocol with dedicated constructor
                 Ok(LlmClient::anthropic(api_key))
+            }
+            ModelProvider::Zhipu => {
+                // Zhipu AI has dedicated constructor in 0.3.8+
+                Ok(LlmClient::zhipu(api_key))
+            }
+            ModelProvider::Aliyun => {
+                // Aliyun DashScope has dedicated constructor in 0.3.8+
+                Ok(LlmClient::aliyun(api_key))
             }
             ModelProvider::Xinference => {
                 // Xinference local server - OpenAI-compatible
@@ -203,12 +235,7 @@ impl LlmModel {
             }
             ModelProvider::OpenAI => {
                 // Standard OpenAI client
-                let endpoint = config.endpoint.as_deref().or(Some("https://api.openai.com/v1"));
-                Ok(LlmClient::openai(api_key, endpoint))
-            }
-            ModelProvider::Zhipu => {
-                // Zhipu AI (智谱AI) - OpenAI-compatible
-                let endpoint = config.endpoint.as_deref().or(Some("https://open.bigmodel.cn/api/paas/v4"));
+                let endpoint = config.endpoint.as_deref();
                 Ok(LlmClient::openai(api_key, endpoint))
             }
             ModelProvider::DeepSeek => {
@@ -221,11 +248,6 @@ impl LlmModel {
                 let endpoint = config.endpoint.as_deref().or(Some("https://api.moonshot.cn/v1"));
                 Ok(LlmClient::openai(api_key, endpoint))
             }
-            ModelProvider::Aliyun => {
-                // Aliyun DashScope - OpenAI-compatible mode
-                let endpoint = config.endpoint.as_deref().or(Some("https://dashscope.aliyuncs.com/compatible-mode/v1"));
-                Ok(LlmClient::openai(api_key, endpoint))
-            }
             ModelProvider::LongCat => {
                 // LongCat - OpenAI-compatible
                 let endpoint = config.endpoint.as_deref().or(Some("https://api.longcat.chat/openai"));
@@ -233,7 +255,6 @@ impl LlmModel {
             }
             ModelProvider::VolcEngine => {
                 // VolcEngine - OpenAI-compatible (requires valid endpoint ID)
-                // Note: The endpoint ID must be created and enabled in VolcEngine console
                 let endpoint = config.endpoint.as_deref().or(Some("https://ark.cn-beijing.volces.com/api/v3"));
                 Ok(LlmClient::openai(api_key, endpoint))
             }

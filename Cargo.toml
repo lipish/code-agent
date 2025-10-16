@@ -23,7 +23,7 @@ futures = "0.3"
 reqwest = { version = "0.11", features = ["json"] }
 
 # LLM connector
-llm-connector = "0.3.1"
+llm-connector = { version = "0.3.8", features = ["streaming"] }
 
 # HTTP server (optional, for service feature)
 axum = { version = "0.7", optional = true }
